@@ -1,0 +1,132 @@
+{# Results block: also returned alone for AJAX (?_partial=1). Uses only list-loaded columns. #}
+{% from "_ui.html" import icon, margin_pill with context %}
+{% set has_filters = params.q or params.status or params.department or params.urgency is not none or params.scarcity is not none or params.profit %}
+{% macro sort_th(key, label, cls='') %}
+  {% set active = params.sort == key %}
+  {% set next_dir = ('asc' if params.dir == 'desc' else 'desc') if active else 'asc' %}
+  <th class="{{ cls }} sortable {{ 'is-sorted' if active }}" aria-sort="{{ ('ascending' if params.dir == 'asc' else 'descending') if active else 'none' }}">
+    <a data-ajax href="{{ url_for('candidates.list_view', **params.as_query(sort=key, dir=next_dir, page=1)) }}">
+      {{ label }}<span class="sort-arrow">{% if active %}{{ '▲' if params.dir == 'asc' else '▼' }}{% else %}↕{% endif %}</span>
+    </a>
+  </th>
+{% endmacro %}
+
+<div id="resultsMeta" data-list-qs="{{ list_qs }}" data-export-qs="{{ export_qs }}" hidden></div>
+
+{% if page.items %}
+<form id="bulkBar" class="bulkbar" method="post" action="{{ url_for('candidates.bulk_script') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="qs" value="{{ list_qs }}">
+  <span data-bulk-ids hidden></span>
+  <strong data-bulk-count>0 selected</strong>
+  <button class="btn btn-sm btn-light" type="submit">{{ icon('zap', 'i-sm') }}Request script</button>
+  <button class="btn btn-sm btn-link ms-auto" type="button" data-bulk-clear>Clear</button>
+</form>
+
+<div class="card-soft results-card">
+<div class="table-responsive">
+  <table class="table app-table align-middle mb-0">
+    <thead>
+      <tr>
+        <th class="col-check"><input class="form-check-input" type="checkbox" data-check-all aria-label="Select all on this page"></th>
+        {{ sort_th('name', 'Candidate', 'col-cand') }}
+        {{ sort_th('client', 'Client / Dept', 'col-client') }}
+        {{ sort_th('current_ctc', 'Current', 'text-end col-num col-current') }}
+        {{ sort_th('expected_ctc', 'Expected', 'text-end col-num col-expected') }}
+        {{ sort_th('budget', 'Budget', 'text-end col-num col-budget') }}
+        {{ sort_th('recommended', 'Recommended', 'text-end col-reco col-num') }}
+        {{ sort_th('profitability', 'Margin', 'col-margin') }}
+        {{ sort_th('urgency', 'Urgency', 'col-urg') }}
+        {{ sort_th('status', 'Status', 'col-status') }}
+        <th class="text-end col-act">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for c in page.items %}
+      {% set ev = c.evaluation %}{% set cl = c.client %}
+      <tr>
+        <td class="col-check"><input class="form-check-input" type="checkbox" value="{{ c.id }}" data-check-row aria-label="Select {{ c.candidate_code }}"></td>
+        <td class="col-cand">
+          <div class="cand">
+            <span class="cand-av">{{ c.full_name|initials }}</span>
+            <span>
+              <a class="cand-name" href="{{ url_for('candidates.summary', candidate_id=c.id) }}">{{ c.full_name }}</a>
+              <small class="cand-meta"><span class="cand-role">{{ c.position_applied_for or '—' }}</span><span class="code-pill">{{ c.candidate_code }}</span></small>
+            </span>
+          </div>
+        </td>
+        <td class="stack-2 col-client">{{ cl.client_name if cl and cl.client_name else '—' }}<small>{{ c.department }}</small></td>
+        <td class="text-end text-nowrap col-num col-current tnum">{{ ev.current_ctc|lakh if ev else '—' }}</td>
+        <td class="text-end text-nowrap col-num col-expected tnum">{{ ev.expected_ctc|lakh if ev else '—' }}</td>
+        <td class="text-end text-nowrap col-num col-budget tnum">{{ cl.client_budget|lakh if cl else '—' }}</td>
+        <td class="text-end text-nowrap col-reco col-num tnum">{{ ev.recommended_offer|lakh if ev else '—' }}</td>
+        <td class="col-margin">{{ margin_pill(ev.profitability_percentage if ev else none) }}</td>
+        <td class="col-urg">
+          {% if cl and cl.client_urgency is not none %}
+          <div class="urg"><span class="badge {{ maps.level_badge('client_urgency', cl.client_urgency) }}">{{ maps.to_label('client_urgency', cl.client_urgency) }}</span>
+            {% if cl.client_timeline_days %}<small>{{ cl.client_timeline_days }} days</small>{% endif %}</div>
+          {% else %}—{% endif %}
+        </td>
+        <td class="col-status">
+          {# The stage is driven by the workflow, never set by hand. #}
+          <span class="badge {{ maps.STATUS_BADGE[c.status] }}">{{ maps.STATUS_LABELS[c.status] }}</span>
+        </td>
+        <td class="text-end text-nowrap col-act">
+          <span class="row-actions">
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-quick="{{ url_for('candidates.quick', candidate_id=c.id) }}" data-tip="Quick view" aria-label="Quick view {{ c.candidate_code }}">{{ icon('eye', 'i-sm') }}</button>
+            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('candidates.summary', candidate_id=c.id) }}" data-tip="Open summary" aria-label="Open summary for {{ c.candidate_code }}">{{ icon('arrow-right', 'i-sm') }}</a>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('candidates.edit', candidate_id=c.id) }}" data-tip="Edit" aria-label="Edit {{ c.candidate_code }}">{{ icon('edit', 'i-sm') }}</a>
+            {% if current_user.is_admin %}
+            <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal" data-tip="Delete" aria-label="Delete {{ c.candidate_code }}"
+                    data-action="{{ url_for('candidates.delete', candidate_id=c.id) }}"
+                    data-name="{{ c.full_name }} ({{ c.candidate_code }})">{{ icon('trash', 'i-sm') }}</button>
+            {% endif %}
+          </span>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="pager-bar">
+  <div class="small text-secondary">Showing {{ page.first_item|num(0) }}–{{ page.last_item|num(0) }} of {{ page.total|num(0) }}</div>
+  {% if page.pages > 1 %}
+  <nav aria-label="Pagination">
+    <ul class="pagination pagination-sm mb-0">
+      <li class="page-item {{ 'disabled' if not page.has_prev }}">
+        <a class="page-link" data-ajax href="{{ url_for('candidates.list_view', **params.as_query(page=page.page - 1)) }}">Prev</a>
+      </li>
+      {% for n in page.window() %}
+        {% if n is none %}
+        <li class="page-item disabled"><span class="page-link">…</span></li>
+        {% else %}
+        <li class="page-item {{ 'active' if n == page.page }}">
+          <a class="page-link" data-ajax href="{{ url_for('candidates.list_view', **params.as_query(page=n)) }}">{{ n }}</a>
+        </li>
+        {% endif %}
+      {% endfor %}
+      <li class="page-item {{ 'disabled' if not page.has_next }}">
+        <a class="page-link" data-ajax href="{{ url_for('candidates.list_view', **params.as_query(page=page.page + 1)) }}">Next</a>
+      </li>
+    </ul>
+  </nav>
+  {% endif %}
+</div>
+</div>
+
+{% elif has_filters %}
+<div class="card-soft results-card"><div class="empty-state">
+  {% include "_empty_icon.html" %}
+  <h3>No matching candidates</h3>
+  <p>Nothing matches your search or filters. Try different keywords or clear the filters.</p>
+  <a class="btn btn-outline-primary" href="{{ url_for('candidates.list_view') }}" onclick="document.getElementById('resetFilters').click(); return false;">Clear search &amp; filters</a>
+</div></div>
+{% else %}
+<div class="card-soft results-card"><div class="empty-state">
+  {% include "_empty_icon.html" %}
+  <h3>No open candidates</h3>
+  <p>Closed negotiations are kept but hidden. Pick <strong>Closed</strong> in the status filter, or open the negotiation register, to see them.</p>
+  <a class="btn btn-outline-primary" href="{{ url_for('negotiations.index', stage='closed') }}">Open negotiation register</a>
+</div></div>
+{% endif %}

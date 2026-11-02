@@ -1,0 +1,409 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon with context %}
+{% block title %}{{ c.full_name }} · {{ c.candidate_code }}{% endblock %}
+
+{% macro rating_dots(value, label) %}
+<div class="rating-row">
+  <span class="rating-label">{{ label }}</span>
+  <span class="rating-dots" role="img" aria-label="{{ value if value else 'Not rated' }} out of 5">
+    {% for n in range(1, 6) %}<i class="dot {{ 'on' if value and n <= value }}"></i>{% endfor %}
+  </span>
+  <span class="rating-num">{{ value ~ '/5' if value else '—' }}</span>
+</div>
+{% endmacro %}
+
+{% macro sec(eyebrow, title, icon_name='') %}
+<div class="sec-head">
+  {% if eyebrow %}<span class="sec-eyebrow">{{ eyebrow }}</span>{% endif %}
+  <h2 class="card-title">{% if icon_name %}{{ icon(icon_name) }}{% endif %}{{ title }}</h2>
+</div>
+{% endmacro %}
+
+{% macro flag(label, on, detail='') %}
+<span class="flag {{ 'flag-on' if on else 'flag-off' }}">
+  <i class="flag-dot"></i>{{ label }}{% if detail %} <small>· {{ detail }}</small>{% endif %}
+</span>
+{% endmacro %}
+
+{% macro kv(label, value) %}
+<div class="kv"><dt>{{ label }}</dt><dd>{{ value if value not in (none, '') else '—' }}</dd></div>
+{% endmacro %}
+
+{% block content %}
+{% set p = ev.profitability_percentage if ev else None %}
+{% set tier = margin_tier(p, TARGET_MARGIN) %}
+{% set gross = (client.client_budget - ev.expected_ctc) if client and ev and client.client_budget is not none and ev.expected_ctc is not none else none %}
+
+<div class="cprofile">
+<nav class="crumbs no-print" aria-label="Breadcrumb"><a href="{{ url_for('dashboard.index') }}">Dashboard</a>{{ icon('chev-right', 'i-sm') }}<a href="{{ url_for('candidates.list_view') }}">Candidates</a>{{ icon('chev-right', 'i-sm') }}<span>{{ c.candidate_code }}</span></nav>
+
+{# ---------------- hero ---------------- #}
+<section class="hero"{% if p is not none %} style="--margin: {{ p|margin_color }}; background: {{ p|margin_hero }}"{% endif %}>
+  <div class="hero-rule" aria-hidden="true"></div>
+  <div class="hero-body">
+    <div class="hero-id min-w-0">
+      <div class="hero-tags">
+        <span class="hero-code">{{ c.candidate_code }}</span>
+      </div>
+      <h1>{{ c.full_name }}</h1>
+      <p class="hero-role">{{ c.position_applied_for }} · {{ c.department }}{% if c.current_company %} · currently at {{ c.current_company }}{% endif %}</p>
+      <p class="hero-meta">Created {{ c.created_at|ist }}{% if c.creator %} by {{ c.creator.name }}{% endif %} · Updated {{ c.updated_at|ist }}</p>
+      <div class="hero-actions no-print">
+        <a class="btn btn-light" href="{{ url_for('candidates.edit', candidate_id=c.id) }}">{{ icon('edit', 'i-sm') }}Edit</a>
+        <button class="btn btn-ghost" type="button" data-print>{{ icon('printer', 'i-sm') }}Print / Save PDF</button>
+        <button class="btn btn-ghost" type="button" data-copy="">{{ icon('link', 'i-sm') }}<span class="copy-label">Copy link</span></button>
+        {% if current_user.is_admin %}
+        <button type="button" class="btn btn-ghost" data-bs-toggle="modal" data-bs-target="#deleteModal"
+                data-action="{{ url_for('candidates.delete', candidate_id=c.id) }}"
+                data-name="{{ c.full_name }} ({{ c.candidate_code }})">{{ icon('trash', 'i-sm') }}Delete</button>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="hero-side">
+      <div class="hero-margin">
+        <div class="hero-margin-top">
+          <span class="hero-label">Profitability margin</span>
+          {% if p is not none %}
+          <span class="hero-tier" style="background: {{ p|margin_tint }}; color: {{ p|margin_ink }}">{{ tier[0] }}</span>
+          {% else %}
+          <span class="hero-tier hero-tier-na">{{ tier[0] }}</span>
+          {% endif %}
+        </div>
+        <div class="hero-margin-figure">
+          <span class="hero-big {{ 'neg' if p is not none and p < 0 }}">{{ p|pct }}</span>
+        </div>
+      </div>
+      <div class="hero-stats">
+        <div><span>Gross margin</span><strong>{{ gross|inr(0) }}</strong></div>
+        <div>
+          <span>vs target</span>
+          {% if p is none %}<strong class="hero-gap na">—</strong>
+          {% elif p > TARGET_MARGIN %}<strong class="hero-gap pos">{{ (p - TARGET_MARGIN)|abs|num(2) }} pts above</strong>
+          {% elif p < TARGET_MARGIN %}<strong class="hero-gap neg">{{ (TARGET_MARGIN - p)|abs|num(2) }} pts below</strong>
+          {% else %}<strong class="hero-gap na">On target</strong>
+          {% endif %}
+        </div>
+        <div><span>Leverage index</span><strong>{{ leverage }} / 10</strong></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+{# ---------------- negotiation stage ---------------- #}
+<section class="card-soft mt-3">
+  <div class="card-head"><h2 class="card-title">{{ icon('target') }}Negotiation stage</h2>
+    <span class="badge {{ maps.STATUS_BADGE[c.status] }}">{{ maps.STATUS_LABELS[c.status] }}</span></div>
+  {% if c.status == 'Draft' %}
+    <p class="card-sub">The candidate data is captured. Generate the negotiation script to move this candidate to InProcess.</p>
+    <form method="post" action="{{ url_for('candidates.request_script', candidate_id=c.id) }}" class="no-print">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-primary" type="submit">{{ icon('zap', 'i-sm') }}Generate negotiation script</button>
+    </form>
+  {% elif c.status == 'InProcess' %}
+    <p class="card-sub">Script requested {{ c.script_requested_at|ist }}. The workflow writes both PDFs and the candidate moves to Generated. It can take a while - refresh the page to check.</p>
+  {% elif c.status == 'Generated' %}
+    <p class="card-sub">The script is ready. Record what you offered and close the negotiation.</p>
+  {% else %}
+    <p class="card-sub">This negotiation is closed{% if negotiation and negotiation.closed_at %} on {{ negotiation.closed_at|ist }}{% endif %}. It stays in the negotiation register and is out of the open pipeline.</p>
+  {% endif %}
+  {% if script and script.full_playbook_pdf_path %}
+  <div class="d-flex flex-wrap gap-2 mt-2">
+    <a class="btn btn-sm btn-outline-primary" href="{{ script.full_playbook_pdf_path }}" target="_blank" rel="noopener">{{ icon('file', 'i-sm') }}Negotiation script (PDF)</a>
+    {% if script.quick_reference_pdf_path %}
+    <a class="btn btn-sm btn-outline-secondary" href="{{ script.quick_reference_pdf_path }}" target="_blank" rel="noopener">{{ icon('file', 'i-sm') }}Quick reference (PDF)</a>
+    {% endif %}
+  </div>
+  {% endif %}
+  <a class="btn btn-sm btn-outline-secondary mt-2" href="{{ url_for('candidates.negotiation', candidate_id=c.id) }}">Open negotiation workspace →</a>
+</section>
+
+{# ---------------- status + radar + compensation ---------------- #}
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card-soft h-100">
+      <div class="card-head">{{ sec('Analysis', 'Negotiation leverage', 'target') }}</div>
+      <div class="radar-wrap"><canvas id="spiderChart" role="img" aria-label="Radar chart of negotiation leverage factors"{% if p is not none %} data-margin="{{ p|margin_color }}"{% endif %}></canvas></div>
+      <p class="radar-caption">Higher = more leverage for candidate · index {{ leverage }} / 10</p>
+      <div class="radar-axes">
+        {% for label in spider.labels %}
+        <div class="axis-row">
+          <span class="axis-name">{{ label }}</span>
+          <span class="axis-bar"><i style="width: {{ spider.values[loop.index0] }}%"></i></span>
+          <b class="axis-val">{{ spider.values[loop.index0] }}</b>
+        </div>
+        {% endfor %}
+      </div>
+
+      <details class="lev-help no-print">
+        <summary>{{ icon('help', 'i-sm') }}How is this calculated?</summary>
+        <p class="lev-help-intro">The <strong>leverage index</strong> is the average of the six axes below, shown out of 10
+          (<code>index = average ÷ 10</code>). Each axis is scored 0&ndash;100, so <strong>Higher = more leverage for candidate</strong>
+          &mdash; the further the shape reaches, the stronger the candidate's bargaining position.</p>
+        <ul class="lev-legend">
+          {% for label in spider.labels %}
+          <li>
+            <span class="lev-name">{{ label }}</span>
+            <span class="lev-note">{{ spider.notes[loop.index0] }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        <p class="lev-help-foot">Some axes (availability of talent, on bench) point the other way on their own — a high rating there
+          means the candidate is <em>easier</em> to replace or <em>keener</em> to move. The index folds them in already, so read each
+          note to see which lever is doing the work.</p>
+      </details>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card-soft h-100">
+      <div class="card-head">{{ sec('Analysis', 'Compensation ladder', 'wallet') }}</div>
+      {% set rungs = [
+        ('Current CTC', ev.current_ctc if ev else none, 'c-cur'),
+        ('Expected CTC', ev.expected_ctc if ev else none, 'c-exp'),
+        ('Recommended offer', ev.recommended_offer if ev else none, ''),
+        ('Max. approved', ev.maximum_approved_offer if ev else none, 'c-max'),
+        ('Competing offer', ev.competing_offer_ctc if ev and ev.has_another_offer == 1 else none, 'c-cmp'),
+        ('Client budget', client.client_budget if client else none, 'c-bud')] %}
+      {% set vals = rungs|map(attribute=1)|select|list %}
+      {% set mx = (vals|max) if vals else 1 %}
+      <div class="ladder">
+        {% for label, val, cls in rungs if val is not none %}
+        <div class="ladder-row">
+          <span class="text-secondary">{{ label }}</span>
+          <div class="bar"><i class="{{ cls }}" style="width: {{ (val / mx * 100) if mx else 0 }}%"></i></div>
+          <b>{{ val|inr(0) }}</b>
+        </div>
+        {% else %}<p class="text-secondary small mb-0">No compensation figures recorded.</p>{% endfor %}
+      </div>
+      {% if ev and ev.current_ctc %}
+      <div class="d-flex flex-wrap gap-2 mt-3">
+        {% for label, val in [('Expected', ev.expected_ctc), ('Recommended', ev.recommended_offer), ('Max. approved', ev.maximum_approved_offer)] if val is not none %}
+          {% set h = hike_pct(val, ev.current_ctc) %}
+          {% if h is not none %}<span class="badge badge-primary">{{ label }}: {{ '+' if h > 0 }}{{ h|pct }} hike</span>{% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if client and ev and client.client_budget and ev.expected_ctc is not none %}
+      {% set b = client.client_budget %}
+      {% set over = gross < 0 %}
+      {% set ctc_w = (([ev.expected_ctc / b * 100, 100]|min) if ev.expected_ctc > 0 else 0) if not over else (b / ev.expected_ctc * 100) %}
+      <div class="note-block">
+        <div class="note-title">Billing allocation of client budget</div>
+        <div class="alloc" role="img" aria-label="Budget split between expected CTC and margin">
+          <i class="a-ctc" style="width: {{ ctc_w }}%"></i>
+          {% if over %}<i class="a-over" style="width: {{ 100 - ctc_w }}%"></i>
+          {% elif gross > 0 %}<i class="a-margin" style="width: {{ 100 - ctc_w }}%"></i>{% endif %}
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--primary)"></i>Expected CTC {{ ev.expected_ctc|inr(0) }}</span>
+          {% if gross >= 0 %}<span><i style="background:var(--primary-300)"></i>Margin {{ gross|inr(0) }}</span>
+          {% else %}<span class="profit-neg"><i style="background:var(--danger)"></i>Over budget by {{ (-gross)|inr(0) }}</span>{% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="ladder-facts">
+        <div>
+          <span>Experience</span>
+          <b>{{ (c.total_years_experience|num(1) ~ ' yrs') if c.total_years_experience is not none else '—' }}</b>
+          {% if c.relevant_years_experience is not none %}<small>{{ c.relevant_years_experience|num(1) }} yrs relevant</small>{% endif %}
+        </div>
+        <div>
+          <span>Notice period</span>
+          <b>{{ c.notice_period or '—' }}</b>
+          {% if c.notice_negotiable is not none %}<small>Negotiable: {{ maps.to_label('notice_negotiable', c.notice_negotiable) }}</small>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  {# ---------------- client details ---------------- #}
+  <div class="col-lg-6">
+    <div class="card-soft h-100">
+      <div class="card-head">{{ sec('Context', 'Client details') }}</div>
+      {% if client %}
+      <dl class="kv-list">
+        {{ kv('Client', client.client_name) }}
+        {{ kv('Position for client', client.position_for_client) }}
+        {{ kv('Client location', client.client_location) }}
+        {{ kv('Skill required', client.skill_required) }}
+        {{ kv('Timeline', (client.client_timeline_days|string ~ ' days') if client.client_timeline_days is not none else none) }}
+        <div class="kv"><dt>Urgency</dt><dd><span class="badge {{ maps.level_badge('client_urgency', client.client_urgency) }}">{{ maps.to_label('client_urgency', client.client_urgency) }}</span></dd></div>
+        <div class="kv"><dt>Skill scarcity</dt><dd><span class="badge {{ maps.level_badge('skill_scarcity', client.skill_scarcity) }}">{{ maps.to_label('skill_scarcity', client.skill_scarcity) }}</span></dd></div>
+        {{ kv('Availability of talent', maps.to_label('availability_of_talent', client.availability_of_talent)) }}
+        {{ kv('Client flexibility', maps.to_label('client_flexibility', client.client_flexibility)) }}
+        {{ kv('Replacement hiring', maps.to_label('replacement_hiring', client.replacement_hiring)) }}
+      </dl>
+      {% if client.notes_from_client %}
+      <div class="note-block"><div class="note-title">Notes from client</div><p>{{ client.notes_from_client }}</p></div>
+      {% endif %}
+      {% else %}<p class="text-muted mb-0">No client details recorded.</p>{% endif %}
+    </div>
+  </div>
+
+  {# ---------------- evaluation ---------------- #}
+  <div class="col-lg-6">
+    <div class="card-soft h-100">
+      <div class="card-head">{{ sec('Context', 'Evaluation') }}</div>
+      {% if ev %}
+      <div class="rating-block">
+        {{ rating_dots(ev.technical_skills_rating, 'Technical skills') }}
+        {{ rating_dots(ev.domain_knowledge_rating, 'Domain knowledge') }}
+        {{ rating_dots(ev.communication_rating, 'Communication') }}
+      </div>
+      <dl class="kv-list mt-3">
+        <div class="kv"><dt>Technical gate</dt><dd><span class="badge {{ maps.level_badge('technical_gate_status', ev.technical_gate_status) }}">{{ maps.to_label('technical_gate_status', ev.technical_gate_status) }}</span></dd></div>
+        <div class="kv"><dt>Risk of losing candidate</dt><dd><span class="badge {{ maps.level_badge('risk_of_losing_candidate', ev.risk_of_losing_candidate) }}">{{ maps.to_label('risk_of_losing_candidate', ev.risk_of_losing_candidate) }}</span></dd></div>
+        {{ kv('Primary motivation', c.primary_motivation) }}
+        {{ kv('Current designation', c.current_designation) }}
+        {{ kv('Current → proposed location', ((c.current_location or '—') ~ ' → ' ~ (c.proposed_work_location or '—'))) }}
+      </dl>
+      <div class="flags">
+        {{ flag('On bench', ev.is_on_bench == 1, (ev.bench_months|num(1) ~ ' months') if ev.is_on_bench == 1 and ev.bench_months is not none else '') }}
+        {{ flag('Wants domain switch', ev.want_to_switch_domain == 1) }}
+        {{ flag('Company upgradation', ev.company_upgradation == 1) }}
+        {{ flag('Position upgradation', ev.position_upgradation == 1) }}
+        {{ flag('Has another offer', ev.has_another_offer == 1) }}
+        {{ flag('Client selected', ev.is_client_selected_candidate == 1) }}
+        {{ flag('Relocation required', c.relocation_required == 1) }}
+      </div>
+      {% else %}<p class="text-muted mb-0">No evaluation recorded.</p>{% endif %}
+    </div>
+  </div>
+</div>
+
+{% if ev and (ev.key_strengths or ev.key_concerns or ev.notes) %}
+<div class="row g-3">
+  {% if ev.key_strengths %}<div class="col-lg-4"><div class="card-soft h-100 note-strength"><div class="note-title">Key strengths</div><p>{{ ev.key_strengths }}</p></div></div>{% endif %}
+  {% if ev.key_concerns %}<div class="col-lg-4"><div class="card-soft h-100 note-concern"><div class="note-title">Key concerns</div><p>{{ ev.key_concerns }}</p></div></div>{% endif %}
+  {% if ev.notes %}<div class="col-lg-4"><div class="card-soft h-100"><div class="note-title">Notes</div><p>{{ ev.notes }}</p></div></div>{% endif %}
+</div>
+{% endif %}
+</div>
+
+{% include "candidates/_delete_modal.html" %}
+{% endblock %}
+
+{% block scripts %}
+{# Chart.js is loaded ONLY on this page (pinned version, deferred). #}
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var data = {{ spider|tojson }};
+
+  function wrap(label) {            // break long axis labels over two lines
+    if (label.length <= 14) return label;
+    var words = label.split(' '), mid = Math.ceil(words.length / 2);
+    return [words.slice(0, mid).join(' '), words.slice(mid).join(' ')];
+  }
+
+  var canvas = document.getElementById('spiderChart');
+  if (canvas && window.Chart) {
+    Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+
+    function hexToRgb(hex) {                       // '#RRGGBB' -> {r,g,b}
+      var m = /^#?([0-9a-f]{6})$/i.exec((hex || '').trim());
+      if (!m) return null;
+      var n = parseInt(m[1], 16);
+      return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+    }
+    function rgba(c, a) { return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + a + ')'; }
+
+    var rgb = hexToRgb(canvas.dataset.margin) || { r: 15, g: 118, b: 110 };
+    var stroke = rgba(rgb, 1);
+    var benchmark = data.values.map(function () { return 50; });
+
+    new Chart(canvas, {
+      type: 'radar',
+      data: {
+        labels: data.labels.map(wrap),
+        datasets: [
+          {
+            label: 'Leverage',
+            data: data.values,
+            borderColor: stroke,
+            borderWidth: 2.5,
+            pointBackgroundColor: '#FFFFFF',
+            pointBorderColor: stroke,
+            pointBorderWidth: 2,
+            pointRadius: 3.5,
+            pointHoverRadius: 6,
+            pointHoverBorderWidth: 3,
+            fill: true,
+            // vertical tint of the margin colour, resolved after layout
+            backgroundColor: function (c) {
+              var area = c.chart.chartArea;
+              if (!area) return rgba(rgb, 0.2);
+              var g = c.chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+              g.addColorStop(0, rgba(rgb, 0.38));
+              g.addColorStop(1, rgba(rgb, 0.06));
+              return g;
+            }
+          },
+          {
+            label: 'Balanced (50)',
+            data: benchmark,
+            borderColor: 'rgba(148, 163, 184, .9)',
+            borderWidth: 1.5,
+            borderDash: [5, 4],
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            fill: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 1.12,
+        animation: { duration: 700, easing: 'easeOutQuart' },
+        plugins: {
+          legend: {
+            display: true, position: 'bottom',
+            labels: { usePointStyle: true, pointStyle: 'rectRounded', boxWidth: 10, boxHeight: 10, padding: 16, color: '#475569', font: { size: 11 } }
+          },
+          tooltip: {
+            backgroundColor: '#0F172A', padding: 10, cornerRadius: 8, boxPadding: 4,
+            filter: function (item) { return item.datasetIndex === 0; },
+            callbacks: {
+              title: function (items) { return data.labels[items[0].dataIndex]; },
+              label: function (ctx) { return 'Score: ' + ctx.parsed.r + ' / 100'; },
+              afterLabel: function (ctx) { return data.notes && data.notes[ctx.dataIndex] ? data.notes[ctx.dataIndex] : ''; }
+            }
+          }
+        },
+        scales: {
+          r: {
+            min: 0, max: 100, beginAtZero: true, startAngle: 0,
+            ticks: { display: false },
+            grid: {
+              color: function (c) { return c.tick && c.tick.value === 50 ? 'rgba(148, 163, 184, .55)' : '#E9EEF4'; },
+              lineWidth: 1
+            },
+            angleLines: { color: '#E9EEF4' },
+            pointLabels: { color: '#0F172A', font: { size: 11.5, weight: 600 }, padding: 14 }
+          }
+        }
+      }
+    });
+  } else if (canvas) {
+    var note = document.createElement('p');
+    note.className = 'radar-caption';
+    note.textContent = 'Chart unavailable. The scores below show the same data.';
+    canvas.replaceWith(note);
+  }
+
+  var modalEl = document.getElementById('deleteModal');
+  if (modalEl) {
+    modalEl.addEventListener('show.bs.modal', function (ev) {
+      var btn = ev.relatedTarget; if (!btn) return;
+      modalEl.querySelector('form').action = btn.dataset.action;
+      modalEl.querySelector('[data-delete-name]').textContent = btn.dataset.name;
+    });
+  }
+});
+</script>
+{% endblock %}

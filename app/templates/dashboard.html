@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon, margin_pill with context %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">Dashboard</h1>
+    <p class="page-sub">Negotiation pipeline at a glance — {{ stats.open_total|num(0) }} open candidate{{ '' if stats.open_total == 1 else 's' }} tracked.</p>
+  </div>
+  <div class="head-actions">
+    <a class="btn btn-outline-primary" href="{{ url_for('export.candidates_xlsx') }}">{{ icon('download', 'i-sm') }}Export</a>
+    <a class="btn btn-primary" href="{{ url_for('candidates.new') }}">{{ icon('plus', 'i-sm') }}Add Candidate</a>
+  </div>
+</div>
+
+<div class="kpi-grid kpi-grid--tall kpi-grid--cols-6 dash-stats">
+  <a class="kpi" href="{{ url_for('candidates.list_view') }}">
+    <div class="kpi-top"><span class="kpi-label">Open candidates</span><span class="kpi-icon">{{ icon('users') }}</span></div>
+    <div class="kpi-value">{{ stats.open_total|num(0) }}</div>
+    <div class="kpi-sub">{% if stats.new_this_month %}<span class="up">+{{ stats.new_this_month|num(0) }}</span> this month{% else %}None added this month{% endif %}</div>
+  </a>
+  <a class="kpi" href="{{ url_for('candidates.list_view', status='Draft') }}">
+    <div class="kpi-top"><span class="kpi-label">Draft</span><span class="kpi-icon info">{{ icon('edit') }}</span></div>
+    <div class="kpi-value">{{ stats.counts['Draft']|num(0) }}</div>
+    <div class="kpi-sub">Still being captured</div>
+  </a>
+  <a class="kpi" href="{{ url_for('candidates.list_view', status='InProcess') }}">
+    <div class="kpi-top"><span class="kpi-label">In progress</span><span class="kpi-icon warn">{{ icon('zap') }}</span></div>
+    <div class="kpi-value">{{ stats.counts['InProcess']|num(0) }}</div>
+    <div class="kpi-sub">Script being generated</div>
+  </a>
+  <a class="kpi" href="{{ url_for('candidates.list_view', status='Generated') }}">
+    <div class="kpi-top"><span class="kpi-label">Script ready</span><span class="kpi-icon info">{{ icon('file') }}</span></div>
+    <div class="kpi-value">{{ stats.counts['Generated']|num(0) }}</div>
+    <div class="kpi-sub">Ready to negotiate</div>
+  </a>
+  <a class="kpi" href="{{ url_for('negotiations.index', stage='closed') }}">
+    <div class="kpi-top"><span class="kpi-label">Closed</span><span class="kpi-icon good">{{ icon('shield') }}</span></div>
+    <div class="kpi-value">{{ stats.counts['Closed']|num(0) }}</div>
+    <div class="kpi-sub">Completed</div>
+  </a>
+  <div class="kpi">
+    <div class="kpi-top"><span class="kpi-label">Avg. profitability</span><span class="kpi-icon {{ 'bad' if stats.avg_profitability is not none and stats.avg_profitability < 0 else 'good' }}">{{ icon('trend') }}</span></div>
+    <div class="kpi-value {{ stats.avg_profitability|profit_class }}">{{ stats.avg_profitability|pct }}</div>
+  </div>
+</div>
+
+<div class="dash-grid mt-3">
+  <section class="card-soft results-card">
+    <div class="p-3 pb-2 d-flex justify-content-between align-items-center gap-2 flex-wrap">
+      <div class="tabs-seg" role="tablist">
+        <a class="{{ 'active' if view == 'all' }}" href="{{ url_for('dashboard.index') }}">All <span class="count">{{ stats.open_total|num(0) }}</span></a>
+        <a class="{{ 'active' if view == 'attention' }}" href="{{ url_for('dashboard.index', view='attention') }}">Action Required <span class="count">{{ stats.attention|num(0) }}</span></a>
+        <a class="{{ 'active' if view == 'urgent' }}" href="{{ url_for('dashboard.index', view='urgent') }}">High Urgency <span class="count">{{ stats.urgent|num(0) }}</span></a>
+        <a class="{{ 'active' if view == 'generated' }}" href="{{ url_for('dashboard.index', view='generated') }}">Script Ready <span class="count">{{ stats.counts['Generated']|num(0) }}</span></a>
+      </div>
+      <form class="search-box" method="get" action="{{ url_for('candidates.list_view') }}" style="flex:0 1 260px">
+        {{ icon('search', 'i-sm') }}
+        <input class="form-control" type="search" name="q" maxlength="100" placeholder="Search all candidates" aria-label="Search candidates" data-search-focus>
+        <kbd>⌘K</kbd>
+      </form>
+    </div>
+
+    {% if recent %}
+    <div class="table-responsive">
+      <table class="table app-table align-middle mb-0">
+        <thead>
+          <tr><th>Candidate</th><th>Client</th><th class="text-end">Expected</th><th class="text-end col-reco">Recommended</th><th>Margin</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody>
+        {% for c in recent %}
+          <tr>
+            <td>
+              <div class="cand">
+                <span class="cand-av">{{ c.full_name|initials }}</span>
+                <span><a class="cand-name" href="{{ url_for('candidates.summary', candidate_id=c.id) }}">{{ c.full_name }}</a><small>{{ c.position_applied_for }} · {{ c.candidate_code }}</small></span>
+              </div>
+            </td>
+            <td>{{ c.client_name or '—' }}</td>
+            <td class="text-end text-nowrap tnum">{{ c.expected_ctc|lakh if c.expected_ctc is not none else '—' }}</td>
+            <td class="text-end text-nowrap col-reco tnum">{{ c.recommended_offer|lakh if c.recommended_offer is not none else '—' }}</td>
+            <td>{{ margin_pill(c.profitability_percentage) }}</td>
+            <td><span class="badge {{ maps.STATUS_BADGE[c.status] }}">{{ maps.STATUS_LABELS.get(c.status, c.status) }}</span></td>
+            <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ url_for('candidates.summary', candidate_id=c.id) }}">Open</a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="pager-bar"><span class="small text-secondary">Showing latest {{ recent|length }}{% if view != 'all' %} in this view{% endif %}</span>
+      <a class="small fw-semibold" href="{{ url_for('candidates.list_view') }}">View all candidates →</a></div>
+    {% elif stats.total == 0 %}
+    <div class="empty-state">
+      {% include "_empty_icon.html" %}
+      <h3>No candidates yet</h3>
+      <p>Add your first candidate to start tracking negotiation profitability.</p>
+      <a class="btn btn-primary" href="{{ url_for('candidates.new') }}">Add Candidate</a>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      {% include "_empty_icon.html" %}
+      <h3>Nothing in this view</h3>
+      <p>No candidates match “{{ {'attention': 'Action Required', 'urgent': 'High Urgency', 'generated': 'Script Ready'}[view] }}” right now.</p>
+      <a class="btn btn-outline-primary" href="{{ url_for('dashboard.index') }}">Show all</a>
+    </div>
+    {% endif %}
+  </section>
+
+  <aside class="d-grid gap-3">
+    <section class="card-soft">
+      <div class="card-head"><h2 class="card-title">{{ icon('alert') }}Urgent actions</h2>
+        {% if stats.attention %}<span class="badge badge-danger">{{ stats.attention }}</span>{% endif %}</div>
+      {% for c in attention %}
+        {% set p = c.profitability_percentage %}
+        <a class="mini-item" href="{{ url_for('candidates.summary', candidate_id=c.id) }}">
+          <span><span class="mini-name">{{ c.full_name }}</span><small>{{ c.client_name or c.position_applied_for }} ·
+            {% if p is not none and p < 0 %}negative margin{% else %}high urgency, high risk{% endif %}</small></span>
+          {{ margin_pill(p) }}
+        </a>
+      {% else %}
+        <p class="text-secondary small mb-0">Nothing needs action. Negative margins and urgent, high-risk candidates appear here.</p>
+      {% endfor %}
+    </section>
+
+    <section class="card-soft">
+      <div class="card-head"><h2 class="card-title">{{ icon('bars') }}Account margin spread</h2></div>
+      {% for r in spread %}
+        {% set w = 0 if r.avg is none else ([[r.avg, 0]|max, 100]|min) %}
+        <div class="bar-row">
+          <span><strong>{{ r.name }}</strong> <small>· {{ r.count }}</small></span><span class="{{ r.avg|profit_class }} fw-semibold">{{ r.avg|pct }}</span>
+          <div class="bar"><i{% if r.avg is not none %} style="width: {{ w }}%;background: {{ r.avg|margin_color }}"{% else %} style="width: 0"{% endif %}></i></div>
+        </div>
+      {% else %}
+        <p class="text-secondary small mb-0">Average margin per client appears once candidates have a client budget.</p>
+      {% endfor %}
+    </section>
+  </aside>
+</div>
+
+<section class="card-soft mt-3">
+  <div class="card-head"><h2 class="card-title">{{ icon('wallet') }}Open pipeline economics</h2>
+    <a class="small fw-semibold" href="{{ url_for('insights.index') }}">Negotiation &amp; Insights →</a></div>
+  <p class="card-sub mb-0">Budget vs. expected cost across candidates that are not Closed.</p>
+  <div class="pipe-strip">
+    <div><span>Client budget</span><strong>{{ stats.pipeline_budget|lakh }}</strong></div>
+    <div><span>Expected CTC</span><strong>{{ stats.pipeline_expected|lakh }}</strong></div>
+    <div><span>Gross margin</span><strong class="{{ stats.pipeline_margin|profit_class }}">{{ stats.pipeline_margin|lakh }}</strong></div>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,9 @@
+{
+  "plugins": [
+    { "name": "frontend", "domain": "frontend", "path": "plugins/frontend" },
+    { "name": "backend", "domain": "backend", "path": "plugins/backend" },
+    { "name": "n8n", "domain": "n8n", "path": "plugins/n8n" },
+    { "name": "ui-ux", "domain": "frontend", "path": "plugins/ui-ux" }
+  ],
+  "note": "Development-purpose plugin scaffolds. Fill each directory as work progresses."
+}

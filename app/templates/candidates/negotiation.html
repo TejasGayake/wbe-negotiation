@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% import "candidates/_form_macros.html" as m with context %}
+{% from "_ui.html" import icon, margin_pill with context %}
+{% block title %}Negotiation · {{ c.candidate_code }}{% endblock %}
+
+{% block content %}
+{% set p = ev.profitability_percentage if ev else none %}
+<nav class="crumbs" aria-label="Breadcrumb"><a href="{{ url_for('dashboard.index') }}">Dashboard</a>{{ icon('chev-right', 'i-sm') }}<a href="{{ url_for('candidates.list_view') }}">Candidates</a>{{ icon('chev-right', 'i-sm') }}<span>{{ c.candidate_code }}</span></nav>
+
+<div class="page-head">
+  <div>
+    <h1 class="page-title">Negotiation · {{ c.full_name }}</h1>
+    <p class="page-sub">{{ c.position_applied_for }}{% if client and client.client_name %} · {{ client.client_name }}{% endif %} · <span class="code-pill">{{ c.candidate_code }}</span></p>
+  </div>
+  <div class="head-actions">
+    <span class="badge {{ maps.STATUS_BADGE[c.status] }}">{{ maps.STATUS_LABELS[c.status] }}</span>
+    <a class="btn btn-outline-secondary" href="{{ url_for('candidates.summary', candidate_id=c.id) }}">Full summary</a>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    {# ---------------------------------------------- the script (ng_5) #}
+    <section class="card-soft">
+      <div class="card-head"><h2 class="card-title">{{ icon('file') }}Negotiation script</h2>
+        {% if c.status == 'Draft' %}<span class="badge badge-muted">Not requested</span>{% endif %}
+      </div>
+      {% if script and script.full_playbook_pdf_path %}
+        <p class="card-sub">Generated {{ script.generated_at|ist }}.</p>
+        <div class="d-flex flex-wrap gap-2">
+          <a class="btn btn-primary" href="{{ script.full_playbook_pdf_path }}" target="_blank" rel="noopener">{{ icon('file', 'i-sm') }}Negotiation script (PDF)</a>
+          {% if script.quick_reference_pdf_path %}
+          <a class="btn btn-outline-primary" href="{{ script.quick_reference_pdf_path }}" target="_blank" rel="noopener">{{ icon('file', 'i-sm') }}Quick reference (PDF)</a>
+          {% endif %}
+        </div>
+      {% elif c.status == 'InProcess' %}
+        <p class="mb-0 text-secondary small">Requested {{ c.script_requested_at|ist }}. The workflow writes both PDFs and the candidate moves to Generated. This can take a while - refresh the page to check.</p>
+      {% elif c.status == 'Draft' %}
+        <p class="mb-3 text-secondary small">The data is captured. Request the script to move this candidate to InProcess.</p>
+        <form method="post" action="{{ url_for('candidates.request_script', candidate_id=c.id) }}">
+          {{ form.csrf_token }}
+          <button class="btn btn-primary" type="submit">{{ icon('zap', 'i-sm') }}Generate negotiation script</button>
+        </form>
+      {% else %}
+        <p class="mb-0 text-secondary small">No script was generated for this candidate.</p>
+      {% endif %}
+    </section>
+
+    {# --------------------------------------- the HR outcome (ng_6) #}
+    <section class="card-soft mt-3">
+      <div class="card-head"><h2 class="card-title">{{ icon('wallet') }}What was agreed</h2>
+        {% if closed %}<span class="badge badge-success">Closed</span>{% endif %}
+      </div>
+      {% if closed %}
+        <dl class="kv-list">
+          <div class="kv"><dt>Amount offered</dt><dd>{{ negotiation.offered_amount|inr if negotiation and negotiation.offered_amount is not none else '—' }}</dd></div>
+          <div class="kv"><dt>Salary confirmed</dt><dd>{{ negotiation.confirmed_ctc|inr if negotiation and negotiation.confirmed_ctc is not none else '—' }}</dd></div>
+          <div class="kv"><dt>Remarks</dt><dd>{{ negotiation.negotiation_notes if negotiation and negotiation.negotiation_notes else '—' }}</dd></div>
+          <div class="kv"><dt>Closed</dt><dd>{{ negotiation.closed_at|ist if negotiation and negotiation.closed_at else '—' }}</dd></div>
+        </dl>
+      {% else %}
+        <form method="post" action="{{ url_for('candidates.negotiation', candidate_id=c.id) }}" novalidate>
+          {{ form.hidden_tag() }}
+          <div class="row g-3">
+            {{ m.input(form.offered_amount, kind='money', minimum=0, maximum=9999999999.99, cols='col-md-6', help='What HR offered during the negotiation.') }}
+            {{ m.input(form.confirmed_ctc, kind='money', minimum=0, maximum=9999999999.99, cols='col-md-6', help='What the candidate confirmed they will accept.') }}
+            {{ m.textarea(form.negotiation_notes, cols='col-12') }}
+          </div>
+          {% if form.errors %}
+          <div class="alert alert-danger py-2 mt-3 mb-0" role="alert">
+            <strong>Not saved.</strong>
+            <ul class="mb-0 ps-3">{% for field, errs in form.errors.items() %}{% for e in errs %}<li>{{ e }}</li>{% endfor %}{% endfor %}</ul>
+          </div>
+          {% endif %}
+          <div class="d-flex flex-wrap gap-2 mt-3">
+            <button class="btn btn-outline-primary" type="submit" name="action" value="save">Save</button>
+            <button class="btn btn-success" type="submit" name="action" value="close">Close negotiation</button>
+            <span class="small text-secondary align-self-center">Closing hides the candidate from the open pipeline and keeps it in the negotiation register.</span>
+          </div>
+        </form>
+      {% endif %}
+    </section>
+  </div>
+
+  {# --------------------------------------------- the numbers you need #}
+  <div class="col-lg-5">
+    <section class="card-soft">
+      <div class="card-head"><h2 class="card-title">{{ icon('trend') }}Negotiation position</h2></div>
+      <div class="metric-grid metric-grid--2">
+        <div class="metric-card"><div class="metric-label">Margin</div><div class="metric-value {{ p|profit_class }}">{{ p|pct }}</div></div>
+        <div class="metric-card"><div class="metric-label">Client budget</div><div class="metric-value">{{ client.client_budget|lakh if client else '—' }}</div></div>
+        <div class="metric-card"><div class="metric-label">Expected CTC</div><div class="metric-value">{{ ev.expected_ctc|lakh if ev else '—' }}</div></div>
+        <div class="metric-card"><div class="metric-label">Recommended offer</div><div class="metric-value">{{ ev.recommended_offer|lakh if ev else '—' }}</div></div>
+      </div>
+      <dl class="kv-list mt-3">
+        <div class="kv"><dt>Current CTC</dt><dd>{{ ev.current_ctc|inr if ev and ev.current_ctc is not none else '—' }}</dd></div>
+        <div class="kv"><dt>Max. approved</dt><dd>{{ ev.maximum_approved_offer|inr if ev and ev.maximum_approved_offer is not none else '—' }}</dd></div>
+        <div class="kv"><dt>Client urgency</dt><dd>{% if client %}{{ maps.to_label('client_urgency', client.client_urgency) }}{% else %}—{% endif %}</dd></div>
+        <div class="kv"><dt>Risk of losing</dt><dd>{% if ev %}{{ maps.to_label('risk_of_losing_candidate', ev.risk_of_losing_candidate) }}{% else %}—{% endif %}</dd></div>
+      </dl>
+    </section>
+  </div>
+</div>
+{% endblock %}

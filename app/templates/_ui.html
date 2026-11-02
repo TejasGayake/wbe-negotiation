@@ -1,0 +1,8 @@
+{% macro icon(name, cls='') -%}<svg class="i {{ cls }}" aria-hidden="true"><use href="#i-{{ name }}"/></svg>{%- endmacro %}
+{% macro margin_pill(p) -%}
+  {%- if p is none -%}<span class="mpill mpill-na">N/A</span>
+  {%- else -%}<span class="mpill" style="background:{{ p|margin_tint }};color:{{ p|margin_ink }}">{{ p|pct }}</span>{%- endif -%}
+{%- endmacro %}
+{% macro level_badge(field, value) -%}
+  <span class="badge {{ maps.level_badge(field, value) }}">{{ maps.to_label(field, value) }}</span>
+{%- endmacro %}

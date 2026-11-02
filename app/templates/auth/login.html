@@ -1,0 +1,43 @@
+{% extends "base_plain.html" %}
+{% from "_ui.html" import icon with context %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <div class="text-center mb-4">
+    <div class="mb-3">{% include "_logo.html" %}</div>
+    <div class="auth-company">{{ COMPANY_NAME }}</div>
+    <h1 class="h5 mt-1 mb-1">{{ PROJECT_NAME }}</h1>
+    <span class="pill-tag auth-pill">N8N Hiring Intelligence</span>
+    <p class="text-secondary small mt-3 mb-0">Sign in to manage candidate negotiations</p>
+  </div>
+
+  <form method="post" novalidate>
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      <label class="form-label" for="email">Email</label>
+      <div class="field-icon">
+        {{ icon('mail') }}
+        <input class="form-control {{ 'is-invalid' if form.email.errors }}" type="email" id="email" name="email"
+               value="{{ form.email.data or '' }}" autocomplete="username" placeholder="you@company.com" autofocus required>
+      </div>
+      {% for e in form.email.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="password">Password</label>
+      <div class="field-icon">
+        {{ icon('lock') }}
+        <input class="form-control {{ 'is-invalid' if form.password.errors }}" type="password" id="password" name="password"
+               autocomplete="current-password" placeholder="Your password" required>
+        <button type="button" class="pw-toggle" data-toggle-password="password">Show</button>
+      </div>
+      {% for e in form.password.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+    </div>
+    <div class="form-check mb-4">
+      <input class="form-check-input" type="checkbox" id="remember" name="remember" value="y" {{ 'checked' if form.remember.data }}>
+      <label class="form-check-label small" for="remember">Keep me signed in for 30 days</label>
+    </div>
+    <button class="btn btn-primary w-100" type="submit">Sign in {{ icon('arrow-right', 'i-sm') }}</button>
+  </form>
+  <p class="text-center text-secondary small mt-3 mb-0">Forgot your password? Ask an Admin to reset it for you.</p>
+</div>
+{% endblock %}

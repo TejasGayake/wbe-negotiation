@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon with context %}
+{% block title %}Candidates{% endblock %}
+{% block content %}
+{% set more_count = (1 if params.scarcity is not none else 0) + (1 if params.profit else 0) %}
+<div class="clist">
+<div class="page-head">
+  <div>
+    <h1 class="page-title">Candidates</h1>
+    <p class="page-sub">Search, filter, bulk-update and export negotiation candidates.</p>
+  </div>
+  <div class="head-actions">
+    <a class="btn btn-primary" href="{{ url_for('candidates.new') }}">{{ icon('plus', 'i-sm') }}Add Candidate</a>
+    <a id="exportBtn" class="btn btn-outline-primary" href="{{ url_for('export.candidates_xlsx') }}{{ '?' ~ export_qs if export_qs }}" title="Export to Excel">{{ icon('download', 'i-sm') }}Export</a>
+  </div>
+</div>
+
+<div class="list-stack" id="listStack">
+<form id="filterForm" class="card-soft filterbar" method="get" action="{{ url_for('candidates.list_view') }}" autocomplete="off">
+  <input type="hidden" name="sort" value="{{ params.sort }}">
+  <input type="hidden" name="dir" value="{{ params.dir }}">
+  <div class="search-box">
+    {{ icon('search', 'i-sm') }}
+    <input class="form-control" type="search" id="q" name="q" value="{{ params.q }}" maxlength="100" data-search-focus
+           placeholder="Search name, code, position or client" aria-label="Search candidates">
+    <kbd>Ctrl K</kbd>
+  </div>
+  <select class="form-select flt" id="f-status" name="status" aria-label="Filter by status">
+    <option value="">All open</option>
+    {% for s in STATUSES %}<option value="{{ s }}" {{ 'selected' if params.status == s }}>{{ maps.STATUS_LABELS[s] }}</option>{% endfor %}
+  </select>
+  <select class="form-select flt" id="f-department" name="department" aria-label="Filter by department">
+    <option value="">All departments</option>
+    {% for d in departments %}<option value="{{ d }}" {{ 'selected' if params.department == d }}>{{ d }}</option>{% endfor %}
+  </select>
+  <select class="form-select flt" id="f-urgency" name="urgency" aria-label="Filter by client urgency">
+    <option value="">Any urgency</option>
+    {% for v, label in maps.choices_for('client_urgency') %}<option value="{{ v }}" {{ 'selected' if params.urgency == v }}>{{ label }}</option>{% endfor %}
+  </select>
+  <select class="form-select flt" id="f-sortby" aria-label="Sort by">
+    {% for key, d, label in sort_options %}
+    <option value="{{ key }}:{{ d }}" {{ 'selected' if params.sort == key and params.dir == d }}>{{ label }}</option>
+    {% endfor %}
+    {% if not sort_match %}<option value="{{ params.sort }}:{{ params.dir }}" data-custom="1" selected>Custom</option>{% endif %}
+  </select>
+
+  <div class="dropdown fb-more-wrap">
+    <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="moreFilters"
+            data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+      {{ icon('sliders', 'i-sm') }}More<span class="fb-badge" id="moreCount"{% if not more_count %} hidden{% endif %}>{{ more_count }}</span>
+    </button>
+    <div class="dropdown-menu dropdown-menu-end fb-more" aria-labelledby="moreFilters">
+      <div class="fb-more-inner">
+        <p class="fb-more-title">Refine results</p>
+        <div class="fb-field">
+          <label class="form-label" for="f-scarcity">Skill scarcity</label>
+          <select class="form-select" id="f-scarcity" name="scarcity">
+            <option value="">Any scarcity</option>
+            {% for v, label in maps.choices_for('skill_scarcity') %}<option value="{{ v }}" {{ 'selected' if params.scarcity == v }}>{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="fb-field">
+          <label class="form-label" for="f-profit">Profitability</label>
+          <select class="form-select" id="f-profit" name="profit">
+            <option value="">Any margin</option>
+            <option value="positive" {{ 'selected' if params.profit == 'positive' }}>Positive</option>
+            <option value="negative" {{ 'selected' if params.profit == 'negative' }}>Negative</option>
+          </select>
+        </div>
+        <div class="fb-field">
+          <span class="form-label" id="perPageLabel">Rows per page</span>
+          <div class="seg" role="radiogroup" aria-labelledby="perPageLabel">
+            {% for n in page_sizes %}<input type="radio" id="per{{ n }}" name="per_page" value="{{ n }}" {{ 'checked' if params.per_page == n }}><label for="per{{ n }}">{{ n }}</label>{% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <span class="fb-sep" aria-hidden="true"></span>
+  <a id="resetFilters" class="btn btn-outline-secondary" href="{{ url_for('candidates.list_view') }}">{{ icon('x', 'i-sm') }}Reset</a>
+</form>
+
+<div id="results" aria-live="polite">
+  {% include "candidates/_results.html" %}
+</div>
+</div>
+
+{% include "candidates/_delete_modal.html" %}
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="quickView" aria-labelledby="quickTitle">
+  <div class="offcanvas-header border-bottom">
+    <h2 class="offcanvas-title h6 mb-0" id="quickTitle">Quick view</h2>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+  </div>
+  <div class="offcanvas-body" id="quickBody"></div>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* Candidates list: debounced search, AJAX results swap, bulk select, quick view, delete modal. */
+document.addEventListener('DOMContentLoaded', function () {
+  var form = document.getElementById('filterForm');
+  var results = document.getElementById('results');
+  var stack = document.getElementById('listStack');
+  var exportBtn = document.getElementById('exportBtn');
+  var sortBy = document.getElementById('f-sortby');
+  var exportBase = {{ url_for('export.candidates_xlsx')|tojson }};
+  var timer = null, controller = null;
+  var selected = new Set();
+
+  function meta() { return document.getElementById('resultsMeta'); }
+  function currentListQs() { return meta() ? meta().dataset.listQs : ''; }
+  function syncMeta() {
+    var m = meta(); if (!m) return;
+    exportBtn.href = exportBase + (m.dataset.exportQs ? '?' + m.dataset.exportQs : '');
+    updateBulk();
+  }
+
+  // Count active filters hidden inside the "More" panel so the button shows a badge.
+  function updateMore() {
+    var el = document.getElementById('moreCount'); if (!el) return;
+    var n = 0;
+    ['scarcity', 'profit'].forEach(function (k) { var f = form.elements[k]; if (f && f.value) n++; });
+    el.textContent = n; el.hidden = n === 0;
+  }
+
+  function load(qs, pushUrl) {
+    if (controller) controller.abort();
+    controller = new AbortController();
+    stack.classList.add('is-loading');
+    fetch(form.action + '?' + qs + (qs ? '&' : '') + '_partial=1', {
+      signal: controller.signal, headers: {'X-Requested-With': 'fetch'}, credentials: 'same-origin'
+    }).then(function (r) {
+      if (r.redirected && r.url.indexOf('/login') !== -1) { window.location = r.url; return null; }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    }).then(function (html) {
+      if (html === null) return;
+      results.innerHTML = html;
+      stack.classList.remove('is-loading');
+      syncMeta();
+      if (pushUrl !== false) history.replaceState(null, '', form.action + (qs ? '?' + qs : ''));
+    }).catch(function (err) {
+      if (err.name === 'AbortError') return;
+      window.location = form.action + (qs ? '?' + qs : '');   // graceful fallback: full reload
+    });
+  }
+  function formQs() {
+    var fd = new FormData(form), p = new URLSearchParams();
+    fd.forEach(function (v, k) { if (v !== '') p.append(k, v); });
+    return p.toString();
+  }
+
+  // Search: 300 ms debounce. Filters / page size: immediate. Page resets to 1 (no page param).
+  form.addEventListener('input', function (e) {
+    if (e.target.name !== 'q') return;
+    clearTimeout(timer);
+    timer = setTimeout(function () { load(formQs()); }, 300);
+  });
+  form.addEventListener('change', function (e) {
+    if (e.target === sortBy) {
+      var parts = sortBy.value.split(':');
+      form.elements['sort'].value = parts[0]; form.elements['dir'].value = parts[1];
+    }
+    if (e.target.name === 'q') return;
+    clearTimeout(timer);
+    load(formQs());
+    updateMore();
+  });
+  form.addEventListener('submit', function (e) { e.preventDefault(); clearTimeout(timer); load(formQs()); });
+
+  // Sort headers and pagination links inside the results block.
+  results.addEventListener('click', function (e) {
+    var a = e.target.closest('a[data-ajax]');
+    if (!a) return;
+    e.preventDefault();
+    var qs = a.getAttribute('href').split('?')[1] || '';
+    var p = new URLSearchParams(qs);
+    ['sort', 'dir'].forEach(function (k) { if (p.has(k)) form.elements[k].value = p.get(k); });
+    var v = form.elements['sort'].value + ':' + form.elements['dir'].value;
+    if (!Array.prototype.some.call(sortBy.options, function (o) { return o.value === v; })) {
+      var custom = sortBy.querySelector('option[data-custom]');
+      if (custom) custom.value = v;
+      else { custom = new Option('Custom', v); custom.setAttribute('data-custom', '1'); sortBy.add(custom); }
+    }
+    sortBy.value = v;
+    load(qs);
+  });
+
+  // Row selection for the bulk bar. Selected ids survive filtering and paging.
+  results.addEventListener('change', function (e) {
+    if (e.target.matches('[data-check-all]')) {
+      var on = e.target.checked;
+      results.querySelectorAll('[data-check-row]').forEach(function (c) {
+        c.checked = on;
+        if (on) selected.add(c.value); else selected.delete(c.value);
+      });
+    } else if (e.target.matches('[data-check-row]')) {
+      if (e.target.checked) selected.add(e.target.value); else selected.delete(e.target.value);
+    } else {
+      return;
+    }
+    updateBulk();
+  });
+
+  // Bulk status bar
+  function updateBulk() {
+    var bar = document.getElementById('bulkBar'); if (!bar) return;
+    var rows = Array.prototype.slice.call(results.querySelectorAll('[data-check-row]'));
+    var shown = 0;
+    rows.forEach(function (c) {
+      var on = selected.has(c.value);
+      c.checked = on;
+      c.closest('tr').classList.toggle('is-selected', on);
+      if (on) shown++;
+    });
+    bar.classList.toggle('show', selected.size > 0);
+    bar.querySelector('[data-bulk-count]').textContent = selected.size + ' selected';
+    var all = results.querySelector('[data-check-all]');
+    if (all) { all.checked = rows.length > 0 && shown === rows.length; all.indeterminate = shown > 0 && shown < rows.length; }
+    var holder = bar.querySelector('[data-bulk-ids]'); holder.innerHTML = '';
+    selected.forEach(function (id) { var i = document.createElement('input'); i.type = 'hidden'; i.name = 'ids'; i.value = id; holder.appendChild(i); });
+  }
+  results.addEventListener('submit', function (e) {
+    if (e.target.id !== 'bulkBar') return;
+    if (!confirm('Request scripts for ' + selected.size + ' candidate(s)? Candidates that are not Draft will be skipped.')) e.preventDefault();
+  });
+  results.addEventListener('click', function (e) {
+    if (e.target.closest('[data-bulk-clear]')) {
+      selected.clear();
+      updateBulk();
+    }
+  });
+
+  // Quick view drawer (fragment fetched on demand)
+  var quickBody = document.getElementById('quickBody');
+  results.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-quick]');
+    if (!b) return;
+    quickBody.innerHTML = '<p class="text-secondary">Loading…</p>';
+    bootstrap.Offcanvas.getOrCreateInstance(document.getElementById('quickView')).show();
+    fetch(b.dataset.quick, {credentials: 'same-origin', headers: {'X-Requested-With': 'fetch'}})
+      .then(function (r) { if (!r.ok) throw 0; return r.text(); })
+      .then(function (html) { quickBody.innerHTML = html; })
+      .catch(function () { quickBody.innerHTML = '<p class="text-danger">Could not load this candidate.</p>'; });
+  });
+
+  // Delete modal (Admin only buttons exist only for admins).
+  var modalEl = document.getElementById('deleteModal');
+  if (modalEl) {
+    modalEl.addEventListener('show.bs.modal', function (ev) {
+      var btn = ev.relatedTarget;
+      if (!btn) return;
+      modalEl.querySelector('form').action = btn.dataset.action;
+      modalEl.querySelector('input[name=qs]').value = currentListQs();
+      modalEl.querySelector('[data-delete-name]').textContent = btn.dataset.name;
+    });
+  }
+
+  // Reset link: clear controls without a full reload.
+  document.getElementById('resetFilters').addEventListener('click', function (e) {
+    e.preventDefault();
+    Array.prototype.forEach.call(form.elements, function (el) {
+      if (el.name === 'q') el.value = '';
+      else if (el.tagName === 'SELECT' && el.name && el.name !== 'per_page') el.value = '';
+    });
+    form.elements['sort'].value = 'created_at';
+    form.elements['dir'].value = 'desc';
+    sortBy.value = 'created_at:desc';
+    load('');
+    updateMore();
+  });
+  syncMeta();
+  updateMore();
+});
+</script>
+{% endblock %}

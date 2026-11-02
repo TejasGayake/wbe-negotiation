@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#0A241F">
+  <title>{% block title %}{{ PROJECT_NAME }}{% endblock %} · {{ COMPANY_NAME }}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v='4.9') }}">
+  <script>try{if(localStorage.getItem('wbe.sidebar')==='1')document.documentElement.classList.add('sidebar-collapsed');}catch(e){}</script>
+  {% block head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+{% include "_icons.html" %}
+{% from "_ui.html" import icon with context %}
+{% block shell %}
+  {% set ep = request.endpoint or '' %}
+  <div class="app-shell" id="appShell">
+    <aside class="app-sidebar" aria-label="Main navigation">
+      <div class="side-head">
+        <a class="side-brand" href="{{ url_for('dashboard.index') }}" aria-label="{{ COMPANY_NAME }} home">
+          {% include "_logo.html" %}
+          <span class="brand-text">
+            <span class="brand-project" title="{{ PROJECT_NAME }}">{{ PROJECT_NAME }}</span>
+            <span class="brand-company" title="{{ COMPANY_NAME }}">{{ COMPANY_NAME }}</span>
+          </span>
+        </a>
+      </div>
+
+      <nav class="side-nav">
+        <a class="{{ 'active' if ep == 'dashboard.index' }}" href="{{ url_for('dashboard.index') }}">{{ icon('layers') }}<span class="nav-text">Dashboard</span></a>
+        <a class="{{ 'active' if ep in ('candidates.list_view', 'candidates.summary', 'candidates.edit', 'candidates.negotiation') }}" href="{{ url_for('candidates.list_view') }}">{{ icon('users') }}<span class="nav-text">Candidates</span></a>
+        <a class="{{ 'active' if ep == 'candidates.new' }}" href="{{ url_for('candidates.new') }}">{{ icon('plus') }}<span class="nav-text">Add Candidate</span></a>
+        <a class="{{ 'active' if ep == 'negotiations.index' }}" href="{{ url_for('negotiations.index') }}">{{ icon('wallet') }}<span class="nav-text">Negotiations</span></a>
+        <a class="{{ 'active' if ep == 'insights.index' }}" href="{{ url_for('insights.index') }}">{{ icon('trend') }}<span class="nav-text">Insights</span></a>
+      </nav>
+
+      <div class="side-foot">
+        <div class="side-label">Margin scale</div>
+        <ul class="side-legend">
+          <li><i class="sw sw-neg"></i>Below {{ MARGIN_RED_AT }}%</li>
+          <li><i class="sw sw-mid"></i>{{ MARGIN_RED_AT }}–{{ MARGIN_GREEN_AT }}%</li>
+          <li><i class="sw sw-pos"></i>{{ MARGIN_GREEN_AT }}% and above</li>
+        </ul>
+      </div>
+
+      <div class="side-util">
+        <button class="icon-btn side-toggle" type="button" data-sidebar-toggle aria-label="Toggle sidebar" aria-expanded="true" title="Toggle sidebar">{{ icon('panel-left') }}</button>
+        <span class="inr-chip" title="All amounts are in Indian Rupees">₹ INR</span>
+        <div class="dropdown dropup ms-auto">
+          <button class="icon-btn" type="button" id="bellBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Needs attention">
+            {{ icon('bell') }}<span class="bell-dot" id="bellDot" hidden></span>
+          </button>
+          <div class="dropdown-menu dropdown-menu-end bell-menu" aria-labelledby="bellBtn">
+            <div class="bell-head"><strong>Needs attention</strong><span class="small text-secondary" id="bellCount"></span></div>
+            <div id="bellList" class="bell-list"><div class="bell-empty">Loading…</div></div>
+            <a class="bell-foot" href="{{ url_for('dashboard.index', view='attention') }}">Open Action Required →</a>
+          </div>
+        </div>
+        <button class="icon-btn" type="button" data-bs-toggle="modal" data-bs-target="#helpModal" aria-label="Help">{{ icon('help') }}</button>
+      </div>
+
+      <div class="side-account">
+        <div class="dropdown dropup">
+          <button class="user-chip dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <span class="avatar">{{ current_user.name|initials(1) }}</span>
+            <span class="user-name">{{ current_user.name }}</span>
+          </button>
+          <ul class="dropdown-menu">
+            <li class="dropdown-header">{{ current_user.email }}<br><span class="badge badge-primary mt-1">{{ current_user.role }}</span></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="{{ url_for('auth.change_password') }}">{{ icon('key', 'me-2') }}Change password</a></li>
+            <li>
+              <form method="post" action="{{ url_for('auth.logout') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="dropdown-item" type="submit">{{ icon('logout', 'me-2') }}Sign out</button>
+              </form>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </aside>
+
+    <div class="sidebar-scrim" data-sidebar-scrim></div>
+
+    <button class="side-fab icon-btn" type="button" data-sidebar-toggle aria-label="Open navigation" aria-expanded="false">{{ icon('panel-left') }}</button>
+
+    <div class="app-body">
+      <main class="app-main">
+        {% include "_flash.html" %}
+        {% block content %}{% endblock %}
+      </main>
+
+      <footer class="app-footer">
+        <div>
+          <span>© {{ now_year() }} {{ COMPANY_NAME }} · {{ PROJECT_NAME }}</span>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title h5" id="helpTitle">How margin is calculated</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="formula-box">Profitability % = (Client budget − Expected CTC) ÷ Client budget × 100</div>
+          <ul class="help-list">
+            <li><strong>Healthy</strong> – at or above the {{ TARGET_MARGIN|pct }} target margin.</li>
+            <li><strong>Below target</strong> – positive but under target. <strong>Deficit</strong> – expected CTC exceeds the budget.</li>
+            <li><strong>Margin colours</strong> – red under {{ MARGIN_RED_AT }}%, green at {{ MARGIN_GREEN_AT }}% and above, and every shade in between as the value moves, so two different margins never share a colour.</li>
+            <li><strong>Leverage index</strong> – average of the six radar axes (shown as x / 10). Higher means more bargaining power for the candidate.</li>
+            <li><strong>Action Required</strong> – open candidates with a negative margin. The bell and watchlist also include high client urgency combined with high risk of losing the candidate.</li>
+          </ul>
+          <div class="help-keys"><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>K</kbd> focus the search box &nbsp; <kbd>Esc</kbd> close dialogs</div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+  <script defer src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/app.js', v='2.3') }}" data-attention-url="{{ url_for('insights.attention_feed') if current_user.is_authenticated else '' }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

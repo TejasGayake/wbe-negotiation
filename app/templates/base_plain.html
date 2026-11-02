@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{# Header-less shell for login and error pages #}
+{% block body_class %}plain-body{% endblock %}
+{% block shell %}
+<main class="plain-wrap">
+  <div class="plain-inner">
+    {% include "_flash.html" %}
+    {% block content %}{% endblock %}
+    <p class="plain-footer">© {{ now_year() }} {{ COMPANY_NAME }}</p>
+  </div>
+</main>
+{% endblock %}

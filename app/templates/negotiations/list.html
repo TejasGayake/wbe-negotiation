@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon, margin_pill with context %}
+{% block title %}Negotiations{% endblock %}
+
+{% block content %}
+<nav class="crumbs" aria-label="Breadcrumb"><a href="{{ url_for('dashboard.index') }}">Dashboard</a>{{ icon('chev-right', 'i-sm') }}<span>Negotiations</span></nav>
+
+<div class="page-head">
+  <div>
+    <h1 class="page-title">Negotiations</h1>
+    <p class="page-sub">What was agreed, and what is still open. A closed negotiation stays here and drops out of the candidate pipeline.</p>
+  </div>
+  <div class="head-actions">
+    <a class="btn btn-outline-primary" href="{{ url_for('candidates.list_view') }}">All candidates</a>
+  </div>
+</div>
+
+<form class="card-soft filterbar mb-3" method="get" action="{{ url_for('negotiations.index') }}" autocomplete="off">
+  <div class="search-box">
+    {{ icon('search', 'i-sm') }}
+    <input class="form-control" type="search" id="q" name="q" value="{{ q }}" maxlength="100" data-search-focus
+           placeholder="Search name, code or client" aria-label="Search negotiations">
+    <kbd>Ctrl K</kbd>
+  </div>
+  <nav class="tabs-seg" aria-label="Filter negotiations by stage">
+    <a class="{{ 'active' if stage == 'open' }}" {{ 'aria-current="page"' if stage == 'open' }} href="{{ url_for('negotiations.index', stage='open', q=q) }}">Open</a>
+    <a class="{{ 'active' if stage == 'closed' }}" {{ 'aria-current="page"' if stage == 'closed' }} href="{{ url_for('negotiations.index', stage='closed', q=q) }}">Closed</a>
+    <a class="{{ 'active' if stage == 'all' }}" {{ 'aria-current="page"' if stage == 'all' }} href="{{ url_for('negotiations.index', stage='all', q=q) }}">All</a>
+  </nav>
+  <input type="hidden" name="stage" value="{{ stage }}">
+  <span class="fb-sep" aria-hidden="true"></span>
+  <button class="btn btn-outline-secondary" type="submit">Search</button>
+</form>
+
+{% if rows %}
+<div class="card-soft results-card">
+<div class="table-responsive">
+  <table class="table app-table align-middle mb-0">
+    <thead>
+      <tr>
+        <th class="col-cand">Candidate</th>
+        <th class="col-client">Client</th>
+        <th class="col-status">Stage</th>
+        <th class="text-end col-num">Offered</th>
+        <th class="text-end col-num">Confirmed</th>
+        <th class="col-margin">Remarks</th>
+        <th class="col-urg">Closed</th>
+        <th class="text-end col-act">Script</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for c in rows %}
+      {% set n = c.negotiation %}
+      {% set s = scripts.get(c.id) %}
+      <tr>
+        <td class="col-cand">
+          <div class="cand">
+            <span class="cand-av">{{ c.full_name|initials }}</span>
+            <span>
+              <a class="cand-name" href="{{ url_for('candidates.negotiation', candidate_id=c.id) }}">{{ c.full_name }}</a>
+              <small class="cand-meta"><span class="cand-role">{{ c.position_applied_for or '—' }}</span><span class="code-pill">{{ c.candidate_code }}</span></small>
+            </span>
+          </div>
+        </td>
+        <td class="stack-2 col-client">{{ c.client.client_name if c.client and c.client.client_name else '—' }}<small>{{ c.department }}</small></td>
+        <td class="col-status"><span class="badge {{ maps.STATUS_BADGE[c.status] }}">{{ c.status }}</span></td>
+        <td class="text-end text-nowrap col-num tnum">{{ n.offered_amount|inr(0) if n and n.offered_amount is not none else '—' }}</td>
+        <td class="text-end text-nowrap col-num tnum">{{ n.confirmed_ctc|inr(0) if n and n.confirmed_ctc is not none else '—' }}</td>
+        <td class="col-margin"><small>{{ n.negotiation_notes if n and n.negotiation_notes else '—' }}</small></td>
+        <td class="col-urg"><small>{{ n.closed_at|ist if n and n.closed_at else '—' }}</small></td>
+        <td class="text-end col-act">
+          {% if s and s.full_playbook_pdf_path %}
+            <a class="btn btn-sm btn-outline-secondary" href="{{ s.full_playbook_pdf_path }}" target="_blank" rel="noopener" title="Negotiation script (PDF)">{{ icon('file', 'i-sm') }}</a>
+          {% else %}<span class="text-secondary">—</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="pager-bar">
+  <div class="small text-secondary">{{ total }} negotiation{{ '' if total == 1 else 's' }}{% if total > rows|length %} · showing the {{ rows|length }} most recent{% endif %}</div>
+</div>
+</div>
+{% else %}
+<div class="card-soft results-card"><div class="empty-state">
+  {% include "_empty_icon.html" %}
+  <h3>No negotiations here</h3>
+  <p>{% if stage == 'closed' %}No negotiation has been closed yet.{% else %}Nothing is waiting to be negotiated. A candidate shows up here once its script is generated.{% endif %}</p>
+  <a class="btn btn-outline-primary" href="{{ url_for('candidates.list_view') }}">Go to candidates</a>
+</div></div>
+{% endif %}
+{% endblock %}

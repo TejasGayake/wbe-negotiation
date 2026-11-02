@@ -1,0 +1,590 @@
+{% extends "base.html" %}
+{% import "candidates/_form_macros.html" as m with context %}
+{% from "_ui.html" import icon with context %}
+{% block title %}{{ 'Edit Candidate' if editing else 'Add Candidate' }}{% endblock %}
+{% block content %}
+<nav class="crumbs"><a href="{{ url_for('dashboard.index') }}">Dashboard</a>{{ icon('chev-right', 'i-sm') }}<a href="{{ url_for('candidates.list_view') }}">Candidates</a>{{ icon('chev-right', 'i-sm') }}<span>{{ 'Edit' if editing else 'Add' }}</span></nav>
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{{ 'Edit Candidate' if editing else 'Add Candidate' }}</h1>
+    <p class="page-sub">
+      {% if editing %}Code <span class="code-pill">{{ candidate.candidate_code }}</span> · the code never changes.
+      {% else %}A candidate code (WBE-YYYY-XXXX) is generated when you save.{% endif %}
+    </p>
+  </div>
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    <span class="cand-chip" id="candChip" hidden><span class="cand-av" id="candChipAv">?</span><span id="candChipName"></span></span>
+    <a class="btn btn-outline-secondary" href="{{ url_for('candidates.summary', candidate_id=candidate.id) if editing else url_for('candidates.list_view') }}">Cancel</a>
+  </div>
+</div>
+
+<ol class="stepper p-0" id="wizardProgress" aria-label="Form steps">
+  <li data-step-pill="1"><button type="button" class="step-card" data-goto="1"><span class="step-num">1</span><span class="step-meta"><small>Step 1</small><b>Candidate</b></span></button></li>
+  <li data-step-pill="2"><button type="button" class="step-card" data-goto="2"><span class="step-num">2</span><span class="step-meta"><small>Step 2</small><b>Client</b></span></button></li>
+  <li data-step-pill="3"><button type="button" class="step-card" data-goto="3"><span class="step-num">3</span><span class="step-meta"><small>Step 3</small><b>Compensation</b></span></button></li>
+  <li data-step-pill="4"><button type="button" class="step-card" data-goto="4"><span class="step-num">4</span><span class="step-meta"><small>Step 4</small><b>Capability</b></span></button></li>
+  <li data-step-pill="5"><button type="button" class="step-card" data-goto="5"><span class="step-num">5</span><span class="step-meta"><small>Step 5</small><b>Location</b></span></button></li>
+  <li data-step-pill="6"><button type="button" class="step-card" data-goto="6"><span class="step-num">6</span><span class="step-meta"><small>Step 6</small><b>Motivation</b></span></button></li>
+  <li data-step-pill="7"><button type="button" class="step-card" data-goto="7"><span class="step-num">7</span><span class="step-meta"><small>Step 7</small><b>Leverage &amp; Risk</b></span></button></li>
+  <li data-step-pill="8"><button type="button" class="step-card" data-goto="8"><span class="step-num">8</span><span class="step-meta"><small>Step 8</small><b>Review &amp; Save</b></span></button></li>
+</ol>
+
+<div class="wizard-layout">
+<div class="min-w-0">
+<form id="candidateForm" method="post" novalidate data-start-step="{{ start_step }}">
+  {{ form.hidden_tag() }}
+
+  {# ================= STEP 1 ================= #}
+  <section class="card-soft wizard-step" data-step="1">
+    <h2 class="card-title">Candidate information</h2>
+    <p class="card-sub">Basic details about the candidate.</p>
+    <div class="row g-3">
+      {{ m.input(form.full_name, required=True, maxlen=150) }}
+      {{ m.input(form.position_applied_for, required=True, maxlen=150) }}
+      {{ m.input(form.department, required=True, maxlen=100, placeholder='e.g. Engineering') }}
+      {{ m.input(form.primary_motivation, maxlen=100) }}
+      {{ m.input(form.total_years_experience, kind='years', minimum=0, maximum=99.9, placeholder='e.g. 8.5') }}
+      {{ m.input(form.relevant_years_experience, kind='years', minimum=0, maximum=99.9, placeholder='e.g. 6') }}
+      {{ m.input(form.current_company, maxlen=150) }}
+      {{ m.input(form.current_designation, maxlen=150) }}
+      {{ m.input(form.notice_period, maxlen=50, placeholder='e.g. 60 days') }}
+      {{ m.choice(form.notice_negotiable, 'notice_negotiable') }}
+      {{ m.input(form.current_location, maxlen=100) }}
+      {{ m.input(form.proposed_work_location, maxlen=100) }}
+      {{ m.choice(form.relocation_required, 'relocation_required') }}
+    </div>
+  </section>
+
+  {# ================= STEP 2 ================= #}
+  <section class="card-soft wizard-step" data-step="2" hidden>
+    <h2 class="card-title">Client details</h2>
+    <p class="card-sub">What the client is offering and how they are hiring.</p>
+    <div class="row g-3">
+      {{ m.input(form.client_name, required=True, maxlen=150) }}
+      {{ m.input(form.client_budget, kind='money', required=True, minimum=10000, maximum=9999999999.99, help='Annual budget in INR (minimum ₹10,000).') }}
+      {{ m.input(form.position_for_client, maxlen=150) }}
+      {{ m.input(form.client_location, maxlen=100) }}
+      {{ m.input(form.skill_required, maxlen=150) }}
+      {{ m.input(form.client_timeline_days, kind='int', minimum=0, maximum=3650, placeholder='e.g. 30') }}
+      {{ m.choice(form.client_urgency, 'client_urgency', cols='col-md-4') }}
+      {{ m.choice(form.client_flexibility, 'client_flexibility', cols='col-md-4') }}
+      {{ m.choice(form.replacement_hiring, 'replacement_hiring', cols='col-md-4') }}
+      {{ m.choice(form.skill_scarcity, 'skill_scarcity', cols='col-md-6') }}
+      {{ m.choice(form.availability_of_talent, 'availability_of_talent', cols='col-md-6') }}
+      {{ m.textarea(form.notes_from_client) }}
+    </div>
+  </section>
+
+  {# ================= STEP 3 (B + C) ================= #}
+  <section class="card-soft wizard-step" data-step="3" hidden>
+    <h2 class="card-title">Compensation &amp; proposed role</h2>
+    <p class="card-sub">What the candidate earns today and what the new role offers.</p>
+
+    <h3 class="group-title">Current &amp; expected compensation</h3>
+    <div class="row g-3">
+      {{ m.input(form.current_ctc, kind='money', minimum=0, maximum=9999999999.99, help='Annual, INR.') }}
+      {{ m.input(form.expected_ctc, kind='money', required=True, minimum=10000, maximum=9999999999.99, help='Annual, INR (minimum ₹10,000).') }}
+      {{ m.input(form.current_fixed_ctc, kind='money', minimum=0, maximum=9999999999.99, help='Annual fixed component, INR.') }}
+      {{ m.input(form.current_variable_bonus, kind='money', minimum=0, maximum=9999999999.99, help='Annual variable / bonus, INR.') }}
+      {{ m.textarea(form.other_benefits, cols='col-md-6') }}
+      {{ m.choice(form.has_another_offer, 'has_another_offer', cols='col-md-3') }}
+      <div class="col-md-3" data-conditional="has_another_offer" hidden>
+        <div class="row g-3">{{ m.input(form.competing_offer_ctc, kind='money', minimum=0, maximum=9999999999.99, cols='col-12') }}</div>
+      </div>
+      {{ m.textarea(form.other_offers_discussion) }}
+      <div class="col-12">
+        <div class="profit-preview" id="profitPreview" aria-live="polite">
+          <span class="profit-preview-label">Estimated profitability</span>
+          <span class="profit-preview-value profit-na" id="profitPreviewValue">N/A</span>
+          <span class="profit-preview-note">(Client budget − Expected CTC) ÷ Client budget</span>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="group-title">Proposed role</h3>
+    <div class="row g-3">
+      {{ m.input(form.proposed_designation, maxlen=150) }}
+      {{ m.text_choice(form.proposed_role_level, 'proposed_role_level') }}
+      {{ m.text_choice(form.expected_business_impact, 'expected_business_impact') }}
+      {{ m.text_choice(form.significant_career_growth, 'significant_career_growth') }}
+      {{ m.textarea(form.key_additional_responsibilities) }}
+    </div>
+  </section>
+
+  {# ================= STEP 4 (D + E) ================= #}
+  <section class="card-soft wizard-step" data-step="4" hidden>
+    <h2 class="card-title">Capability &amp; market position</h2>
+    <p class="card-sub">How strong the candidate is and where their pay sits in the market.</p>
+
+    <h3 class="group-title">Capability &amp; potential</h3>
+    <div class="row g-3">
+      {{ m.rating(form.technical_skills_rating) }}
+      {{ m.rating(form.domain_knowledge_rating) }}
+      {{ m.rating(form.communication_rating) }}
+      {{ m.text_choice(form.overall_candidate_potential, 'overall_candidate_potential', cols='col-12') }}
+      {{ m.textarea(form.key_strengths, cols='col-md-6') }}
+      {{ m.textarea(form.key_concerns, cols='col-md-6') }}
+    </div>
+
+    <h3 class="group-title">Market position</h3>
+    <div class="row g-3">
+      {{ m.input(form.estimated_market_ctc, kind='money', minimum=0, maximum=9999999999.99, help='Annual market rate, INR.') }}
+      {{ m.text_choice(form.expected_vs_market, 'expected_vs_market') }}
+      {{ m.input(form.company_band_min, kind='money', minimum=0, maximum=9999999999.99, help='Lowest point of the client band, INR.') }}
+      {{ m.input(form.company_band_target, kind='money', minimum=0, maximum=9999999999.99, help='Target point of the client band, INR.') }}
+      {{ m.input(form.company_band_max, kind='money', minimum=0, maximum=9999999999.99, help='Highest point of the client band, INR.') }}
+    </div>
+  </section>
+
+  {# ================= STEP 5 (F + G) ================= #}
+  <section class="card-soft wizard-step" data-step="5" hidden>
+    <h2 class="card-title">Location &amp; career transition</h2>
+    <p class="card-sub">Relocation expectations and how big a move this role is.</p>
+
+    <h3 class="group-title">Relocation</h3>
+    <div class="row g-3">
+      {{ m.text_choice(form.relocation_influence_compensation, 'relocation_influence_compensation') }}
+      {{ m.text_choice(form.can_offer_relocation_support, 'can_offer_relocation_support') }}
+    </div>
+
+    <h3 class="group-title">Career transition</h3>
+    <div class="row g-3">
+      {{ m.text_choice(form.current_org_type, 'current_org_type') }}
+      {{ m.text_choice(form.proposed_org_type, 'proposed_org_type') }}
+      {{ m.text_choice(form.significant_career_transition, 'significant_career_transition') }}
+      {{ m.textarea(form.major_career_benefits) }}
+    </div>
+  </section>
+
+  {# ================= STEP 6 (H) ================= #}
+  <section class="card-soft wizard-step" data-step="6" hidden>
+    <h2 class="card-title">Motivation ranking</h2>
+    <p class="card-sub">Rank what matters most to the candidate: 1 = most important, 5 = least. Leave anything irrelevant blank.</p>
+    <div class="row g-3">
+      {{ m.rating(form.motivation_salary_rank, required=False) }}
+      {{ m.rating(form.motivation_career_growth_rank, required=False) }}
+      {{ m.rating(form.motivation_designation_rank, required=False) }}
+      {{ m.rating(form.motivation_role_responsibility_rank, required=False) }}
+      {{ m.rating(form.motivation_company_brand_rank, required=False) }}
+      {{ m.rating(form.motivation_oem_exposure_rank, required=False) }}
+      {{ m.rating(form.motivation_location_rank, required=False) }}
+      {{ m.rating(form.motivation_work_environment_rank, required=False) }}
+      {{ m.rating(form.motivation_technology_learning_rank, required=False) }}
+      {{ m.rating(form.motivation_international_exposure_rank, required=False) }}
+      {{ m.rating(form.motivation_other_rank, required=False) }}
+    </div>
+  </section>
+
+  {# ================= STEP 7 (I + J) ================= #}
+  <section class="card-soft wizard-step" data-step="7" hidden>
+    <h2 class="card-title">Leverage &amp; hiring risk</h2>
+    <p class="card-sub">Where the negotiation should land and what could make it fail.</p>
+
+    <h3 class="group-title">Negotiation position</h3>
+    <div class="row g-3">
+      {{ m.input(form.recommended_offer, kind='money', minimum=0, maximum=9999999999.99, help='The offer HR will lead with, INR.') }}
+      {{ m.input(form.maximum_approved_offer, kind='money', minimum=0, maximum=9999999999.99, help='Hard ceiling HR may not cross, INR.') }}
+      {{ m.input(form.minimum_acceptable_offer_candidate, kind='money', minimum=0, maximum=9999999999.99, help='Lowest figure the candidate will accept, INR.') }}
+      {{ m.input(form.hr_estimated_fair_compensation, kind='money', minimum=0, maximum=9999999999.99, help='HR view of a fair package, INR.') }}
+      {{ m.text_choice(form.candidate_negotiation_power, 'candidate_negotiation_power') }}
+      {{ m.text_choice(form.company_negotiation_power, 'company_negotiation_power') }}
+    </div>
+
+    <h3 class="group-title">Hiring risk assessment</h3>
+    <div class="row g-3">
+      {{ m.rating(form.risk_compensation_expectation, cols='col-md-3', required=False) }}
+      {{ m.rating(form.risk_counter_offer, cols='col-md-3', required=False) }}
+      {{ m.rating(form.risk_relocation, cols='col-md-3', required=False) }}
+      {{ m.rating(form.risk_retention, cols='col-md-3', required=False) }}
+      {{ m.rating(form.risk_skill_capability, cols='col-md-3', required=False) }}
+      {{ m.rating(form.risk_cultural_fit, cols='col-md-3', required=False) }}
+      {{ m.rating(form.risk_notice_period, cols='col-md-3', required=False) }}
+      {{ m.rating(form.risk_early_attrition, cols='col-md-3', required=False) }}
+      {{ m.text_choice(form.overall_hiring_risk, 'overall_hiring_risk', cols='col-12') }}
+    </div>
+  </section>
+
+  {# ================= STEP 8 (K + L + review) ================= #}
+  <section class="card-soft wizard-step" data-step="8" hidden>
+    <h2 class="card-title">Review &amp; save</h2>
+    <p class="card-sub">Final classification and HR recommendation, then check everything below. Nothing is saved until you press Save.</p>
+
+    <h3 class="group-title">Final candidate classification</h3>
+    <div class="row g-3">
+      {{ m.text_choice(form.candidate_classification, 'candidate_classification', cols='col-12') }}
+    </div>
+
+    <h3 class="group-title">HR recommendation</h3>
+    <div class="row g-3">
+      {{ m.text_choice(form.recommended_action, 'recommended_action', cols='col-12') }}
+      {{ m.textarea(form.key_reason_recommended_compensation) }}
+      {{ m.textarea(form.alternatives_to_ctc) }}
+    </div>
+
+    <h3 class="group-title">Operational flags</h3>
+    <div class="row g-3">
+      {{ m.choice(form.is_on_bench, 'is_on_bench', cols='col-md-3') }}
+      <div class="col-md-3" data-conditional="is_on_bench" hidden>
+        <div class="row g-3">{{ m.input(form.bench_months, kind='years', minimum=0, maximum=999.9, cols='col-12', placeholder='e.g. 3') }}</div>
+      </div>
+      {{ m.choice(form.is_client_selected_candidate, 'is_client_selected_candidate', cols='col-md-3') }}
+      {{ m.choice(form.want_to_switch_domain, 'want_to_switch_domain', cols='col-md-3') }}
+      {{ m.choice(form.technical_gate_status, 'technical_gate_status', cols='col-md-3') }}
+      {{ m.choice(form.company_upgradation, 'company_upgradation', cols='col-md-3') }}
+      {{ m.choice(form.position_upgradation, 'position_upgradation', cols='col-md-3') }}
+      {{ m.choice(form.risk_of_losing_candidate, 'risk_of_losing_candidate', cols='col-md-3') }}
+      {{ m.textarea(form.notes) }}
+    </div>
+
+    <h3 class="group-title">Summary</h3>
+    <div class="profit-hero" id="reviewProfit">
+      <div class="profit-hero-label">Profitability</div>
+      <div class="profit-hero-value profit-na" id="reviewProfitValue">N/A</div>
+    </div>
+
+    <div id="reviewBody" class="review-grid"></div>
+  </section>
+
+  <div class="wizard-nav">
+    <button type="button" class="btn btn-outline-secondary" id="btnBack">{{ icon('arrow-left', 'i-sm') }}Back</button>
+    <div class="d-flex gap-2">
+      <button type="button" class="btn btn-primary" id="btnNext">Next{{ icon('arrow-right', 'i-sm') }}</button>
+      <button type="submit" class="btn btn-success" id="btnSave" hidden>{{ 'Save changes' if editing else 'Save candidate' }}</button>
+    </div>
+  </div>
+</form>
+</div>
+
+<aside class="sim-panel" id="simPanel" data-target="{{ TARGET_MARGIN }}" aria-label="Live negotiation simulator">
+  <div class="sim-card">
+    <h3>Live margin simulator</h3>
+    <div class="sim-big" id="simMargin">N/A</div>
+    <span class="sim-status" id="simTier">Enter budget &amp; expected CTC</span>
+    <div class="sim-rows">
+      <div><span>Gross margin</span><b id="simGross">—</b></div>
+      <div><span>Per month</span><b id="simMonth">—</b></div>
+      <div><span>Hike over current</span><b id="simHike">—</b></div>
+      <div><span>Margin at recommended offer</span><b id="simRecMargin">—</b></div>
+    </div>
+  </div>
+  <div class="card-soft sim-box">
+    <h4>Offer positions</h4>
+    <div class="ladder" id="simLadder"><p class="sim-note mb-0">Add compensation figures to compare them.</p></div>
+  </div>
+  <div class="card-soft sim-box">
+    <h4>Leverage index</h4>
+    <div class="d-flex align-items-baseline gap-2"><span class="kpi-value" id="simLev" style="margin:0">—</span><span class="text-secondary">/ 10</span></div>
+    <div class="bar-row mt-2 mb-0 sim-bar"><div class="bar"><i id="simLevBar" style="width:0"></i></div></div>
+    <p class="sim-note mb-0">Average of urgency, scarcity, talent availability, risk of losing, client flexibility and bench time. Higher = more leverage for the candidate.</p>
+  </div>
+</aside>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* 8-step wizard: per-step client-side validation, review rendering, live profitability. */
+document.addEventListener('DOMContentLoaded', function () {
+  var form = document.getElementById('candidateForm');
+  var steps = Array.prototype.slice.call(form.querySelectorAll('.wizard-step'));
+  var pills = document.querySelectorAll('[data-step-pill]');
+  var btnBack = document.getElementById('btnBack'), btnNext = document.getElementById('btnNext'), btnSave = document.getElementById('btnSave');
+  var STEP_NAMES = {1: 'Candidate information', 2: 'Client details', 3: 'Compensation & proposed role', 4: 'Capability & market position', 5: 'Location & career transition', 6: 'Motivation ranking', 7: 'Leverage & hiring risk', 8: 'Classification & recommendation'};
+  var LAST = 8;
+  var current = 1, visited = {1: true};
+
+  /* ---------- helpers ---------- */
+  function el(name) { return form.elements[name]; }
+  function num(raw) {
+    if (raw === null || raw === undefined) return null;
+    var s = String(raw).replace(/[₹,\s]/g, '');
+    if (s === '') return null;
+    return /^-?\d+(\.\d+)?$/.test(s) ? parseFloat(s) : NaN;
+  }
+  function inr(n) {
+    if (n === null || isNaN(n)) return '—';
+    var neg = n < 0, s = Math.abs(n).toFixed(2).split('.'), i = s[0], out;
+    if (i.length > 3) { var head = i.slice(0, -3), tail = i.slice(-3); out = head.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + tail; } else { out = i; }
+    return (neg ? '-' : '') + '₹' + out + '.' + s[1];
+  }
+  function value(name) {
+    var e = el(name);
+    if (!e) return '';
+    if (e.length && e[0] && e[0].type === 'radio') { for (var i = 0; i < e.length; i++) if (e[i].checked) return e[i].value; return ''; }
+    return (e.value || '').trim();
+  }
+  function setError(name, msg) {
+    var holder = form.querySelector('[data-error-for="' + name + '"]');
+    if (holder) holder.textContent = msg || '';
+    var e = el(name);
+    var inputs = (e && e.length && e[0].type === 'radio') ? [form.querySelector('[data-field="' + name + '"] .rating-input, [data-field="' + name + '"] .seg')] : [e];
+    inputs.forEach(function (x) { if (x) x.classList.toggle('is-invalid', !!msg); });
+  }
+  /* ---------- per-field rules ---------- */
+  function checkField(name) {
+    var wrap = form.querySelector('[data-field="' + name + '"]');
+    if (!wrap) return true;
+    if (wrap.closest('[data-conditional][hidden]')) { setError(name, ''); return true; }
+    var holder = wrap.querySelector('[data-label]');
+    var label = holder ? holder.getAttribute('data-label') : name;
+    var kindHolder = wrap.querySelector('[data-kind]');
+    var kind = kindHolder ? kindHolder.getAttribute('data-kind') : '';
+    var required = !!wrap.querySelector('[data-required]');
+    var v = value(name), msg = '';
+    if (required && v === '') msg = label + ' is required.';
+    else if (v !== '' && (kind === 'money' || kind === 'years' || kind === 'int')) {
+      var n = num(v);
+      var d = kindHolder;
+      if (isNaN(n)) msg = 'Enter a valid number.';
+      else if (kind === 'int' && n % 1 !== 0) msg = 'Enter a whole number.';
+      else if (d.hasAttribute('data-min') && n < parseFloat(d.getAttribute('data-min'))) msg = label + ' must be at least ' + (kind === 'money' ? inr(parseFloat(d.getAttribute('data-min'))) : d.getAttribute('data-min')) + '.';
+      else if (d.hasAttribute('data-max') && n > parseFloat(d.getAttribute('data-max'))) msg = label + ' is too large.';
+    } else if (v !== '' && kindHolder && kindHolder.hasAttribute('data-maxlen') && v.length > parseInt(kindHolder.getAttribute('data-maxlen'), 10)) {
+      msg = 'Maximum ' + kindHolder.getAttribute('data-maxlen') + ' characters allowed.';
+    }
+    setError(name, msg);
+    return msg === '';
+  }
+
+  function crossChecks(stepNo) {
+    var ok = true;
+    if (stepNo === 1) {
+      var t = num(value('total_years_experience')), r = num(value('relevant_years_experience'));
+      if (t !== null && r !== null && !isNaN(t) && !isNaN(r) && r > t) { setError('relevant_years_experience', 'Relevant experience cannot exceed total experience.'); ok = false; }
+    }
+    if (stepNo === 3) {
+      if (value('has_another_offer') === '1' && value('competing_offer_ctc') === '') { setError('competing_offer_ctc', 'Competing offer CTC is required when the candidate has another offer.'); ok = false; }
+      else setError('competing_offer_ctc', '');
+    }
+    if (stepNo === 4) {
+      var bandMin = num(value('company_band_min')), bandMax = num(value('company_band_max'));
+      if (bandMin !== null && bandMax !== null && !isNaN(bandMin) && !isNaN(bandMax) && bandMin > bandMax) { setError('company_band_min', 'Band minimum cannot exceed the band maximum.'); ok = false; }
+      else setError('company_band_min', '');
+    }
+    if (stepNo === 7) {
+      var rec = num(value('recommended_offer')), mx = num(value('maximum_approved_offer'));
+      if (rec !== null && mx !== null && !isNaN(rec) && !isNaN(mx) && rec > mx) { setError('recommended_offer', 'Recommended offer cannot exceed the maximum approved offer.'); ok = false; }
+      else setError('recommended_offer', '');
+    }
+    if (stepNo === LAST) {
+      if (value('is_on_bench') === '1' && value('bench_months') === '') { setError('bench_months', 'Bench months is required when the candidate is on bench.'); ok = false; }
+      else setError('bench_months', '');
+    }
+    return ok;
+  }
+
+  function validateStep(stepNo) {
+    var ok = true, firstBad = null;
+    var section = form.querySelector('.wizard-step[data-step="' + stepNo + '"]');
+    section.querySelectorAll('[data-field]').forEach(function (wrap) {
+      var name = wrap.getAttribute('data-field');
+      if (!checkField(name)) { ok = false; if (!firstBad) firstBad = wrap; }
+    });
+    if (!crossChecks(stepNo)) { ok = false; if (!firstBad) firstBad = section.querySelector('.field-error:not(:empty)'); }
+    if (!ok && firstBad) {
+      var target = firstBad.closest('[data-field]') || firstBad;
+      target.scrollIntoView({behavior: 'smooth', block: 'center'});
+      var focusable = target.querySelector('input,select,textarea'); if (focusable) focusable.focus({preventScroll: true});
+    }
+    return ok;
+  }
+
+  /* ---------- navigation ---------- */
+  function show(n) {
+    current = n; visited[n] = true;
+    steps.forEach(function (s) { s.hidden = parseInt(s.dataset.step, 10) !== n; });
+    pills.forEach(function (p) {
+      var k = parseInt(p.dataset.stepPill, 10);
+      p.classList.toggle('active', k === n);
+      p.classList.toggle('done', k < n);
+    });
+    btnBack.style.visibility = n === 1 ? 'hidden' : 'visible';
+    btnNext.hidden = n === LAST; btnSave.hidden = n !== LAST;
+    if (n === LAST) renderReview();
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+
+  btnNext.addEventListener('click', function () { if (validateStep(current)) show(current + 1); });
+  btnBack.addEventListener('click', function () { if (current > 1) show(current - 1); });
+  document.querySelectorAll('[data-goto]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var target = parseInt(b.dataset.goto, 10);
+      if (target <= current) { show(target); return; }
+      // moving forward: every step before the target must be valid
+      for (var s = current; s < target; s++) { if (!validateStep(s)) { show(s); return; } }
+      show(target);
+    });
+  });
+  form.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type !== 'radio') {
+      e.preventDefault();
+      if (current < LAST) btnNext.click();
+    }
+  });
+  form.addEventListener('submit', function (e) {
+    for (var s = 1; s <= LAST; s++) { if (!validateStep(s)) { e.preventDefault(); show(s); return; } }
+    btnSave.disabled = true; btnSave.textContent = 'Saving…';
+  });
+
+  /* ---------- live re-validation, hints, conditionals ----------
+     Errors are only cleared/refreshed while typing or changing a field that
+     currently shows an error. We deliberately do NOT validate on blur: showing or
+     hiding an error on blur shifts the layout between mousedown and mouseup and
+     makes the Next/Back buttons miss the click. */
+  function revalidate(target) {
+    var section = target.closest && target.closest('.wizard-step');
+    if (!section) return;
+    var stepNo = parseInt(section.dataset.step, 10), had = false;
+    section.querySelectorAll('[data-field]').forEach(function (wrap) {
+      var holder = wrap.querySelector('[data-error-for]');
+      if (holder && holder.textContent) { had = true; checkField(wrap.getAttribute('data-field')); }
+    });
+    if (had) crossChecks(stepNo);
+  }
+  form.addEventListener('input', function (e) { revalidate(e.target); });
+  form.addEventListener('change', function (e) { revalidate(e.target); });
+
+  function updateHints() {
+    form.querySelectorAll('.money-hint').forEach(function (h) {
+      var n = num(value(h.dataset.hintFor));
+      h.textContent = (n === null || isNaN(n)) ? '' : inr(n);
+    });
+    updateProfit();
+  }
+  function profitText(budget, expected) {
+    if (budget === null || expected === null || isNaN(budget) || isNaN(expected) || budget <= 0) return {text: 'N/A', cls: 'profit-na'};
+    var p = Math.round(((budget - expected) / budget) * 10000) / 100;
+    var s = p.toFixed(2).split('.'), neg = p < 0, i = s[0].replace('-', '');
+    if (i.length > 3) i = i.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + i.slice(-3);
+    return {text: (neg ? '-' : '') + i + '.' + s[1] + '%', cls: p > 0 ? 'profit-pos' : (p < 0 ? 'profit-neg' : 'profit-zero')};
+  }
+  var simPanel = document.getElementById('simPanel');
+  var TARGET = parseFloat(simPanel.dataset.target) || 0;
+  function lakhText(n) {
+    if (n === null || isNaN(n)) return '—';
+    var neg = n < 0, a = Math.abs(n), t;
+    if (a >= 1e7) t = '₹' + (a / 1e7).toFixed(2) + ' Cr'; else if (a >= 1e5) t = '₹' + (a / 1e5).toFixed(2) + ' L'; else t = '₹' + Math.round(a).toLocaleString('en-IN');
+    return (neg ? '-' : '') + t;
+  }
+  function pctOf(budget, cost) {
+    if (budget === null || cost === null || isNaN(budget) || isNaN(cost) || budget <= 0) return null;
+    return Math.round(((budget - cost) / budget) * 10000) / 100;
+  }
+  function tri(v) { return v === '1' ? 100 : (v === '0' ? 50 : 0); }
+  function updateSim() {
+    var budget = num(value('client_budget')), exp = num(value('expected_ctc')), cur = num(value('current_ctc')),
+        rec = num(value('recommended_offer')), mx = num(value('maximum_approved_offer')),
+        cmp = value('has_another_offer') === '1' ? num(value('competing_offer_ctc')) : null;
+    var p = pctOf(budget, exp), big = document.getElementById('simMargin'), tier = document.getElementById('simTier');
+    big.textContent = p === null ? 'N/A' : p.toFixed(2) + '%';
+    big.classList.toggle('neg', p !== null && p < 0);
+    if (p === null) tier.textContent = 'Enter budget & expected CTC';
+    else if (p >= TARGET) tier.textContent = 'Healthy · ' + (p - TARGET).toFixed(2) + ' pts above target';
+    else if (p > 0) tier.textContent = 'Below target · ' + (TARGET - p).toFixed(2) + ' pts short';
+    else if (p === 0) tier.textContent = 'Break-even';
+    else tier.textContent = 'Deficit · expected CTC exceeds budget';
+    var gross = (budget !== null && exp !== null && !isNaN(budget) && !isNaN(exp)) ? budget - exp : null;
+    document.getElementById('simGross').textContent = lakhText(gross);
+    document.getElementById('simMonth').textContent = gross === null ? '—' : lakhText(gross / 12);
+    document.getElementById('simHike').textContent = (cur && exp !== null && !isNaN(exp) && cur > 0) ? (((exp - cur) / cur * 100) >= 0 ? '+' : '') + ((exp - cur) / cur * 100).toFixed(1) + '%' : '—';
+    var rm = pctOf(budget, rec);
+    document.getElementById('simRecMargin').textContent = rm === null ? '—' : rm.toFixed(2) + '%';
+
+    var rows = [['Current CTC', cur, ''], ['Expected CTC', exp, 'c-exp'], ['Recommended', rec, ''], ['Max. approved', mx, 'c-max'], ['Competing offer', cmp, 'c-cmp'], ['Client budget', budget, 'c-bud']]
+      .filter(function (r) { return r[1] !== null && !isNaN(r[1]) && r[1] > 0; });
+    var ladder = document.getElementById('simLadder');
+    if (!rows.length) ladder.innerHTML = '<p class="sim-note mb-0">Add compensation figures to compare them.</p>';
+    else {
+      var top = Math.max.apply(null, rows.map(function (r) { return r[1]; }));
+      ladder.innerHTML = rows.map(function (r) {
+        return '<div class="ladder-row" style="grid-template-columns:104px 1fr 78px"><span class="text-secondary">' + r[0] + '</span><div class="bar"><i class="' + r[2] + '" style="width:' + (r[1] / top * 100).toFixed(1) + '%"></i></div><b>' + lakhText(r[1]) + '</b></div>';
+      }).join('');
+    }
+
+    var scores = [tri(value('client_urgency')), tri(value('skill_scarcity')), tri(value('availability_of_talent')), tri(value('risk_of_losing_candidate')),
+                  value('client_flexibility') === '1' ? 100 : 0, 0];
+    var months = num(value('bench_months'));
+    if (value('is_on_bench') === '1' && months !== null && !isNaN(months)) scores[5] = Math.min(months / 6, 1) * 100;
+    var lev = scores.reduce(function (a, b) { return a + b; }, 0) / 6 / 10;
+    document.getElementById('simLev').textContent = lev.toFixed(1);
+    document.getElementById('simLevBar').style.width = (lev * 10) + '%';
+
+    var name = value('full_name'), chip = document.getElementById('candChip');
+    chip.hidden = !name;
+    document.getElementById('candChipName').textContent = name;
+    document.getElementById('candChipAv').textContent = name ? name.split(/\s+/).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase() : '?';
+  }
+  form.addEventListener('input', updateSim);
+  form.addEventListener('change', updateSim);
+
+  function updateProfit() {
+    var r = profitText(num(value('client_budget')), num(value('expected_ctc')));
+    ['profitPreviewValue', 'reviewProfitValue'].forEach(function (id) {
+      var node = document.getElementById(id); if (!node) return;
+      node.textContent = r.text; node.className = node.className.replace(/profit-(na|pos|neg|zero)/g, '').trim() + ' ' + r.cls;
+    });
+  }
+  form.addEventListener('input', function (e) {
+    if (e.target.dataset && (e.target.dataset.kind === 'money' || e.target.dataset.kind === 'years')) updateHints();
+  });
+
+  function syncConditionals() {
+    form.querySelectorAll('[data-conditional]').forEach(function (box) {
+      var on = value(box.dataset.conditional) === '1';
+      box.hidden = !on;
+      if (!on) box.querySelectorAll('[data-error-for]').forEach(function (h) { h.textContent = ''; });
+    });
+  }
+  form.addEventListener('change', function (e) {
+    if (e.target.name === 'has_another_offer' || e.target.name === 'is_on_bench') syncConditionals();
+  });
+
+  /* ---------- review ---------- */
+  function display(name, wrap) {
+    var e = el(name);
+    if (!e) return '';
+    if (e.length && e[0] && e[0].type === 'radio') {
+      var v = value(name); if (!v) return '';
+      if (wrap.querySelector('.rating-input')) return v + ' / 5';
+      var chosen = form.querySelector('input[name="' + name + '"]:checked + label'); return chosen ? chosen.textContent : v;
+    }
+    if (e.tagName === 'SELECT') return e.value === '' ? '' : e.options[e.selectedIndex].text;
+    var raw = (e.value || '').trim();
+    var kind = e.getAttribute('data-kind');
+    if (raw !== '' && kind === 'money') { var n = num(raw); return isNaN(n) ? raw : inr(n); }
+    return raw;
+  }
+  function renderReview() {
+    var body = document.getElementById('reviewBody');
+    body.innerHTML = '';
+    [1, 2, 3, 4, 5, 6, 7, 8].forEach(function (stepNo) {
+      var section = form.querySelector('.wizard-step[data-step="' + stepNo + '"]');
+      var card = document.createElement('div'); card.className = 'review-card';
+      var head = document.createElement('div'); head.className = 'review-head';
+      var title = document.createElement('h3'); title.textContent = STEP_NAMES[stepNo];
+      var edit = document.createElement('button'); edit.type = 'button'; edit.className = 'btn btn-sm btn-outline-primary'; edit.textContent = 'Edit';
+      edit.addEventListener('click', function () { show(stepNo); });
+      head.appendChild(title); head.appendChild(edit); card.appendChild(head);
+      var dl = document.createElement('dl'); dl.className = 'review-list';
+      section.querySelectorAll('[data-field]').forEach(function (wrap) {
+        if (wrap.closest('[data-conditional][hidden]')) return;
+        var name = wrap.getAttribute('data-field');
+        var lab = wrap.querySelector('.form-label'); if (!lab) return;
+        var dt = document.createElement('dt'); dt.textContent = lab.childNodes[0].textContent.trim();
+        var dd = document.createElement('dd'); var v = display(name, wrap);
+        dd.textContent = v === '' ? '—' : v; if (v === '') dd.className = 'text-muted';
+        dl.appendChild(dt); dl.appendChild(dd);
+      });
+      card.appendChild(dl); body.appendChild(card);
+    });
+    updateProfit();
+  }
+
+  /* ---------- init ---------- */
+  syncConditionals(); updateHints(); updateSim();
+  show(parseInt(form.dataset.startStep, 10) || 1);
+  var firstErr = form.querySelector('.wizard-step:not([hidden]) .field-error:not(:empty)');
+  if (firstErr) { var w = firstErr.closest('[data-field]'); if (w) setTimeout(function () { w.scrollIntoView({block: 'center'}); }, 150); }
+});
+</script>
+{% endblock %}

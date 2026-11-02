@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon, margin_pill with context %}
+{% block title %}Insights{% endblock %}
+{% macro spread(rows, empty) %}
+  {% for r in rows %}
+    {% set w = 0 if r.avg is none else ([[r.avg, 0]|max, 100]|min) %}
+    <div class="bar-row">
+      <span><strong>{{ r.name }}</strong> <small>· {{ r.count }} candidate{{ '' if r.count == 1 else 's' }}</small></span>
+      <span class="{{ r.avg|profit_class }} fw-semibold">{{ r.avg|pct }}</span>
+      <div class="bar"><i{% if r.avg is not none %} style="width: {{ w }}%;background: {{ r.avg|margin_color }}"{% else %} style="width: 0"{% endif %}></i></div>
+    </div>
+  {% else %}<p class="text-secondary small mb-0">{{ empty }}</p>{% endfor %}
+{% endmacro %}
+{% macro dist(field, data) %}
+  {% set total = data.values()|sum %}
+  {% for v in [1, 0, -1] %}
+    {% set n = data.get(v, 0) %}
+    <div class="dist-row"><span>{{ maps.to_label(field, v) }}</span>
+      <div class="bar"><i style="width: {{ (n / total * 100) if total else 0 }}%"></i></div><b>{{ n }}</b></div>
+  {% endfor %}
+  {% if data.get(-9) %}<div class="dist-row"><span>Not set</span><div class="bar"><i style="width: {{ data[-9] / total * 100 }}%"></i></div><b>{{ data[-9] }}</b></div>{% endif %}
+{% endmacro %}
+{% block content %}
+<nav class="crumbs"><a href="{{ url_for('dashboard.index') }}">Dashboard</a>{{ icon('chev-right', 'i-sm') }}<span>Insights</span></nav>
+<div class="page-head">
+  <div>
+    <h1 class="page-title">Insights</h1>
+    <p class="page-sub">Portfolio view of margin, market pressure and candidates that need a decision.</p>
+  </div>
+  <div class="head-actions">
+    <a class="btn btn-outline-primary" href="{{ url_for('export.candidates_xlsx') }}">{{ icon('download', 'i-sm') }}Export all</a>
+  </div>
+</div>
+
+<div class="kpi-grid kpi-grid--tall kpi-grid--cols-5">
+  <div class="kpi"><div class="kpi-top"><span class="kpi-label">Avg. margin</span><span class="kpi-icon good">{{ icon('trend') }}</span></div>
+    <div class="kpi-value {{ stats.avg_profitability|profit_class }}">{{ stats.avg_profitability|pct }}</div></div>
+  <div class="kpi"><div class="kpi-top"><span class="kpi-label">Open pipeline budget</span><span class="kpi-icon">{{ icon('wallet') }}</span></div>
+    <div class="kpi-value">{{ stats.pipeline_budget|lakh }}</div><div class="kpi-sub">Expected {{ stats.pipeline_expected|lakh }}</div></div>
+  <div class="kpi"><div class="kpi-top"><span class="kpi-label">Gross margin</span><span class="kpi-icon info">{{ icon('layers') }}</span></div>
+    <div class="kpi-value {{ stats.pipeline_margin|profit_class }}">{{ stats.pipeline_margin|lakh }}</div><div class="kpi-sub">Budget − expected CTC</div></div>
+  <div class="kpi"><div class="kpi-top"><span class="kpi-label">Negative margin</span><span class="kpi-icon bad">{{ icon('alert') }}</span></div>
+    <div class="kpi-value">{{ stats.attention|num(0) }}</div><div class="kpi-sub">Open candidates</div></div>
+  <div class="kpi"><div class="kpi-top"><span class="kpi-label">High urgency</span><span class="kpi-icon warn">{{ icon('zap') }}</span></div>
+    <div class="kpi-value">{{ stats.urgent|num(0) }}</div><div class="kpi-sub">Open candidates</div></div>
+</div>
+
+<div class="insight-grid mt-3">
+  <section class="card-soft"><div class="card-head"><h2 class="card-title">{{ icon('building') }}Margin by client</h2></div>
+    {{ spread(by_client, 'Client margins appear once candidates have a client budget.') }}</section>
+  <section class="card-soft"><div class="card-head"><h2 class="card-title">{{ icon('briefcase') }}Margin by department</h2></div>
+    {{ spread(by_department, 'No departments yet.') }}</section>
+</div>
+
+<div class="insight-grid mt-3">
+  <section class="card-soft"><div class="card-head"><h2 class="card-title">{{ icon('clock') }}Client urgency</h2></div>{{ dist('client_urgency', urgency) }}</section>
+  <section class="card-soft"><div class="card-head"><h2 class="card-title">{{ icon('target') }}Skill scarcity</h2></div>{{ dist('skill_scarcity', scarcity) }}</section>
+  <section class="card-soft"><div class="card-head"><h2 class="card-title">{{ icon('shield') }}Risk of losing candidate</h2></div>{{ dist('risk_of_losing_candidate', risk) }}</section>
+</div>
+
+<div class="insight-grid mt-3">
+  <section class="card-soft">
+    <div class="card-head"><h2 class="card-title">{{ icon('alert') }}Margin deficit</h2><span class="small text-secondary">Expected CTC above budget</span></div>
+    {% for c in negative %}
+      <a class="mini-item" href="{{ url_for('candidates.summary', candidate_id=c.id) }}">
+        <span><span class="mini-name">{{ c.full_name }}</span><small>{{ c.client.client_name if c.client and c.client.client_name else c.position_applied_for }} · {{ c.candidate_code }}</small></span>
+        {{ margin_pill(c.evaluation.profitability_percentage if c.evaluation else none) }}
+      </a>
+    {% else %}<p class="text-secondary small mb-0">No open candidate has a negative margin.</p>{% endfor %}
+  </section>
+  <section class="card-soft">
+    <div class="card-head"><h2 class="card-title">{{ icon('zap') }}Watchlist</h2><span class="small text-secondary">Negative margin, or urgent + high risk</span></div>
+    {% for c in watch %}
+      <a class="mini-item" href="{{ url_for('candidates.summary', candidate_id=c.id) }}">
+        <span><span class="mini-name">{{ c.full_name }}</span><small>{{ c.candidate_code }} · {{ c.status }}</small></span>
+        {{ margin_pill(c.evaluation.profitability_percentage if c.evaluation else none) }}
+      </a>
+    {% else %}<p class="text-secondary small mb-0">Nothing on the watchlist.</p>{% endfor %}
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,88 @@
+{# Hand-rendered field macros: full layout control; validation data-attributes feed the step validator. #}
+
+{% macro raw_value(f) -%}
+  {%- if f.raw_data is not none and f.raw_data|length > 0 -%}{{ f.raw_data[0] }}
+  {%- elif f.data is not none -%}{{ f.data }}{%- endif -%}
+{%- endmacro %}
+
+{% macro errors(f) %}
+  <div class="field-error" role="alert" data-error-for="{{ f.name }}">{% for e in f.errors %}{{ e }}{% if not loop.last %} {% endif %}{% endfor %}</div>
+{% endmacro %}
+
+{% macro label(f, required=False) %}
+  <label class="form-label" for="{{ f.name }}">{{ f.label.text }}{% if required %}<span class="req" aria-hidden="true">*</span>{% endif %}</label>
+{% endmacro %}
+
+{# kind: text | money | years | int | decimal #}
+{% macro input(f, kind='text', required=False, maxlen=None, minimum=None, maximum=None, placeholder='', help='', cols='col-md-6') %}
+<div class="{{ cols }}" data-field="{{ f.name }}">
+  {{ label(f, required) }}
+  <div class="{{ 'input-group' if kind == 'money' }}">
+    {% if kind == 'money' %}<span class="input-group-text">₹</span>{% endif %}
+    <input class="form-control {{ 'is-invalid' if f.errors }}" type="text" id="{{ f.name }}" name="{{ f.name }}"
+           value="{{ raw_value(f) }}" placeholder="{{ placeholder }}"
+           {% if kind in ('money', 'years', 'int', 'decimal') %}inputmode="decimal"{% endif %}
+           {% if maxlen %}maxlength="{{ maxlen }}" data-maxlen="{{ maxlen }}"{% endif %}
+           data-kind="{{ kind }}" data-label="{{ f.label.text }}"
+           {% if required %}data-required="1" aria-required="true"{% endif %}
+           {% if minimum is not none %}data-min="{{ minimum }}"{% endif %}
+           {% if maximum is not none %}data-max="{{ maximum }}"{% endif %}
+           autocomplete="off">
+  </div>
+  {% if kind == 'money' %}<div class="money-hint" data-hint-for="{{ f.name }}"></div>{% endif %}
+  {% if help %}<div class="form-text">{{ help }}</div>{% endif %}
+  {{ errors(f) }}
+</div>
+{% endmacro %}
+
+{% macro choice(f, key, cols='col-md-6') %}
+<div class="{{ cols }}" data-field="{{ f.name }}">
+  <span class="form-label d-block" id="lbl_{{ f.name }}">{{ f.label.text }}</span>
+  <div class="seg {{ 'is-invalid' if f.errors }}" role="radiogroup" aria-labelledby="lbl_{{ f.name }}"
+       data-label="{{ f.label.text }}" data-kind="choice">
+    {% for v, text in maps.choices_for(key) %}
+    <input type="radio" id="{{ f.name }}_{{ v }}" name="{{ f.name }}" value="{{ v }}" {{ 'checked' if f.data is not none and f.data == v }}>
+    <label for="{{ f.name }}_{{ v }}">{{ text }}</label>
+    {% endfor %}
+  </div>
+  {{ errors(f) }}
+</div>
+{% endmacro %}
+
+{% macro text_choice(f, key, cols='col-md-6') %}
+<div class="{{ cols }}" data-field="{{ f.name }}">
+  <span class="form-label d-block" id="lbl_{{ f.name }}">{{ f.label.text }}</span>
+  <div class="seg {{ 'is-invalid' if f.errors }}" role="radiogroup" aria-labelledby="lbl_{{ f.name }}"
+       data-label="{{ f.label.text }}" data-kind="choice">
+    {% for v, text in maps.text_choices_for(key) %}
+    <input type="radio" id="{{ f.name }}_{{ loop.index }}" name="{{ f.name }}" value="{{ v }}" {{ 'checked' if f.data == v }}>
+    <label for="{{ f.name }}_{{ loop.index }}">{{ text }}</label>
+    {% endfor %}
+  </div>
+  {{ errors(f) }}
+</div>
+{% endmacro %}
+
+{% macro rating(f, cols='col-md-4', required=True) %}
+<div class="{{ cols }}" data-field="{{ f.name }}">
+  <label class="form-label">{{ f.label.text }}{% if required %}<span class="req" aria-hidden="true">*</span>{% endif %}</label>
+  <div class="rating-input {{ 'is-invalid' if f.errors }}" role="radiogroup" aria-label="{{ f.label.text }}"{% if required %} aria-required="true"{% endif %}
+       data-label="{{ f.label.text }}"{% if required %} data-required="1"{% endif %} data-kind="rating">
+    {% for n in range(1, 6) %}
+    <input type="radio" id="{{ f.name }}_{{ n }}" name="{{ f.name }}" value="{{ n }}" aria-label="{{ n }} out of 5" {{ 'checked' if f.data == n }}>
+    <label for="{{ f.name }}_{{ n }}" title="{{ n }} of 5">{{ n }}</label>
+    {% endfor %}
+  </div>
+  <div class="form-text">1 = Poor · 5 = Excellent</div>
+  {{ errors(f) }}
+</div>
+{% endmacro %}
+
+{% macro textarea(f, rows=3, cols='col-12', maxlen=5000) %}
+<div class="{{ cols }}" data-field="{{ f.name }}">
+  {{ label(f) }}
+  <textarea class="form-control {{ 'is-invalid' if f.errors }}" id="{{ f.name }}" name="{{ f.name }}" rows="{{ rows }}"
+            maxlength="{{ maxlen }}" data-maxlen="{{ maxlen }}" data-kind="text" data-label="{{ f.label.text }}">{{ raw_value(f) }}</textarea>
+  {{ errors(f) }}
+</div>
+{% endmacro %}

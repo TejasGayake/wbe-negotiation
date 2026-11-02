@@ -1,0 +1,41 @@
+{# Quick-view fragment for the list drawer. Same data as the summary, condensed. #}
+{% from "_ui.html" import icon, margin_pill, level_badge with context %}
+{% set p = ev.profitability_percentage if ev else none %}
+{% set tier = margin_tier(p, TARGET_MARGIN) %}
+<div class="cand mb-3">
+  <span class="cand-av" style="width:44px;height:44px;font-size:.9rem">{{ c.full_name|initials }}</span>
+  <span>
+    <span class="cand-name" style="font-size:1.05rem">{{ c.full_name }}</span>
+    <small>{{ c.position_applied_for }} · {{ c.department }}</small>
+    <small><span class="code-pill">{{ c.candidate_code }}</span> <span class="badge {{ maps.STATUS_BADGE[c.status] }}">{{ maps.STATUS_LABELS[c.status] }}</span></small>
+  </span>
+</div>
+
+<div class="metric-grid metric-grid--2 mb-3">
+  <div class="metric-card"><div class="metric-label">Margin</div><div class="metric-value {{ p|profit_class }}">{{ p|pct }}</div><div class="metric-sub"><span class="badge {{ tier[1] }}">{{ tier[0] }}</span></div></div>
+  <div class="metric-card"><div class="metric-label">Leverage index</div><div class="metric-value">{{ leverage }} <small class="text-secondary">/ 10</small></div><div class="metric-sub">Higher = candidate has more leverage</div></div>
+</div>
+
+<h3 class="quick-sec">Commercials</h3>
+<dl class="kv-list">
+  <div class="kv"><dt>Client</dt><dd>{{ client.client_name or '—' if client else '—' }}</dd></div>
+  <div class="kv"><dt>Client budget</dt><dd>{{ client.client_budget|inr if client else '—' }}</dd></div>
+  <div class="kv"><dt>Current CTC</dt><dd>{{ ev.current_ctc|inr if ev else '—' }}</dd></div>
+  <div class="kv"><dt>Expected CTC</dt><dd>{{ ev.expected_ctc|inr if ev else '—' }}
+    {% if ev and ev.expected_ctc and ev.current_ctc %}{% set h = hike_pct(ev.expected_ctc, ev.current_ctc) %}{% if h is not none %}<small class="text-secondary">({{ '+' if h > 0 }}{{ h|pct }})</small>{% endif %}{% endif %}</dd></div>
+  <div class="kv"><dt>Recommended offer</dt><dd>{{ ev.recommended_offer|inr if ev else '—' }}</dd></div>
+  <div class="kv"><dt>Max. approved</dt><dd>{{ ev.maximum_approved_offer|inr if ev else '—' }}</dd></div>
+  <div class="kv"><dt>Competing offer</dt><dd>{% if ev and ev.has_another_offer == 1 %}{{ ev.competing_offer_ctc|inr }}{% else %}—{% endif %}</dd></div>
+</dl>
+
+<h3 class="quick-sec">Risk &amp; signals</h3>
+<dl class="kv-list">
+  <div class="kv"><dt>Client urgency</dt><dd>{% if client %}{{ level_badge('client_urgency', client.client_urgency) }}{% else %}—{% endif %}</dd></div>
+  <div class="kv"><dt>Risk of losing</dt><dd>{% if ev %}{{ level_badge('risk_of_losing_candidate', ev.risk_of_losing_candidate) }}{% else %}—{% endif %}</dd></div>
+  <div class="kv"><dt>Technical gate</dt><dd>{% if ev %}{{ level_badge('technical_gate_status', ev.technical_gate_status) }}{% else %}—{% endif %}</dd></div>
+</dl>
+
+<div class="quick-actions">
+  <a class="btn btn-primary flex-fill" href="{{ url_for('candidates.summary', candidate_id=c.id) }}">Full summary</a>
+  <a class="btn btn-outline-secondary" href="{{ url_for('candidates.edit', candidate_id=c.id) }}">{{ icon('edit', 'i-sm') }}Edit</a>
+</div>
